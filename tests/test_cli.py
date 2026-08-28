@@ -103,8 +103,17 @@ def patch_pool(monkeypatch, outcome, members=(), tmp_path=None):
         return outcome
 
     def career_stage(_client, _candidates, _config, funnel, **_kwargs):
+        from tenuretrack.career import AFFILIATION_LED, HIGH, StartEstimate
+        from tenuretrack.pool import Candidate
+
         funnel.record("start in window", "estimated start in the window", len(members))
-        return list(members)
+        return [
+            (
+                Candidate(author_id=f"A{2000000 + i}", name=""),
+                StartEstimate(f"A{2000000 + i}", 2012, AFFILIATION_LED, HIGH),
+            )
+            for i in range(len(members))
+        ]
 
     def benchmarks_stage(_client, _members, _asked, _config, **_kwargs):
         from tenuretrack.metrics import BenchmarkResult
@@ -126,6 +135,9 @@ def patch_pool(monkeypatch, outcome, members=(), tmp_path=None):
 
     monkeypatch.setattr(cli, "build_benchmarks", benchmarks_stage)
     monkeypatch.setattr(cli, "build_report", report_stage)
+    monkeypatch.setattr(
+        cli, "build_chaperone", lambda *a, **k: (Path("c.csv"), Path("c.md"), None, None)
+    )
 
 
 def fake_pool(kept=3, tmp_path=None):

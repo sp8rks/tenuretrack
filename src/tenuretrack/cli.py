@@ -15,6 +15,7 @@ import yaml
 
 from tenuretrack import __version__
 from tenuretrack.career import build_starts, candidates_worth_asking
+from tenuretrack.chaperone import build_chaperone
 from tenuretrack.config import Config, ConfigError, load_config
 from tenuretrack.metrics import build_benchmarks
 from tenuretrack.openalex import (
@@ -249,6 +250,13 @@ def run(
                 data_dir=data_dir,
                 on_progress=typer.echo,
             )
+            if config.output.chaperone:
+                build_chaperone(
+                    benchmarks,
+                    {c.author_id: e for c, e in members},
+                    config,
+                    on_progress=typer.echo,
+                )
             report_path, subject, horizon = build_report(
                 client,
                 config,

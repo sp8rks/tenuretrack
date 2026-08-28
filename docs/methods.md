@@ -137,7 +137,21 @@ Outputs are `results/benchmarks.csv` and `results/benchmarks.md`. Both writers r
 
 ## 9. Chaperone analysis
 
-Each headline-cohort window paper is classified by the member's role: led, first-not-led, or middle. Top-quartile venue rates are compared by role with a cluster-bootstrap CI on the led-vs-middle gap, plus a paired within-person comparison and sign test. This approximates, cross-sectionally, the longitudinal design of Sekara et al. (PNAS 2018).
+Each headline-cohort window paper is classified by the member's role: led (last author or flagged corresponding), first-not-led, or middle. Only papers whose venue has an impact figure are counted, on every side: including papers whose venue cannot be placed would make the rate track OpenAlex's venue coverage, which differs systematically by role.
+
+Two readings are reported, because either alone misleads.
+
+**Pooled across papers.** The top-quartile rate per role over every window paper in the cohort, with a cluster-bootstrap 95% CI on the middle-minus-led gap, resampling people. This answers "across this subfield's output", and is dominated by whoever published most.
+
+**Paired within person.** For everyone with at least 3 venue-resolvable papers in both the led and middle classes, the within-person top-quartile share in each class, the median of each, and a two-sided sign test on which direction each person went. This answers "for a typical person", and removes field, institution, career stage and productivity at once because each person is their own control. Below three papers a single paper flips a person's share from 0 to 1 and the test starts counting coin flips.
+
+Where the two disagree, the disagreement is the finding and the report says so.
+
+A per-venue table gives the share of the cohort's papers at each of the busiest venues that the cohort led, which names venues and never people.
+
+This approximates, cross-sectionally, the longitudinal design of Sekara, Deville, Andersen, Jones, Lehmann and Ahmadpoor, "The chaperone effect in scientific publishing", PNAS 2018 (doi 10.1073/pnas.1800471115). They followed authors through time and modelled the sequence of a career; here each person's window is one snapshot and the comparison is across roles within it. The direction of a difference is informative, its size is not comparable to theirs.
+
+Measured on one subfield cohort of 1,091: pooled top-quartile rate 25.4% on led papers and 28.1% on middle-author papers, a gap of 2.8% (95% CI 0.6% to 5.0%). Within person, across the 770 people with enough papers in both classes, the median rate was 18.2% on papers they led and 25.0% on papers they did not, with 393 people higher when not leading against 297 the other way (sign test p = 0.0003). Both readings point the same way.
 
 ## 10. Known limitations
 
