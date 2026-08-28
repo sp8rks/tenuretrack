@@ -67,7 +67,18 @@ MIN_LED_AT_INSTITUTION = 2
 """Led papers needed at an institution before it counts as an independent post.
 
 One led paper is a fluke of author ordering. Two at the same place, after
-arriving there, is the shape of running a group.
+arriving there, is the shape of running a group. This is a floor, not the whole
+test: see `PRINCIPAL_LED_SHARE`.
+"""
+
+PRINCIPAL_LED_SHARE = 0.2
+"""How much of a person's led output an institution must hold to be a real post.
+
+A flat two-paper bar treats a stray affiliation as equal evidence to a career.
+Measured case: a subject with 71 led papers at his university also carried two
+at a nearby medical center, and the flat rule picked the medical center. Judging
+each institution against the person's own strongest post fixes that without any
+absolute number, which would not travel across fields.
 """
 
 TRAINEE_LOOKBACK_YEARS = 15
@@ -129,12 +140,14 @@ def estimate_start(
 ) -> StartEstimate:
     """Estimate the first independent start from one person's papers.
 
-    Rule 2: the earliest institution where the person has at least two led
-    papers, taking the first year they carried its byline, and only when some
-    earlier institution shows no led papers at all. That earlier institution is
-    the PhD or postdoc, and its absence is what makes the estimate ambiguous:
-    someone whose whole record sits at one place could be a faculty member who
-    never moved, or a student who stayed.
+    Rule 2: find the institutions that look like independent posts, meaning
+    they hold at least two of the person's led papers and at least a fifth of
+    however many they led at their strongest post. Take the earliest of those
+    by first byline year, and accept it only when some earlier institution was
+    not itself a post. That earlier institution is the PhD or postdoc, and its
+    absence is what makes the estimate ambiguous: someone whose whole record
+    sits at one place could be a faculty member who never moved, or a student
+    who stayed.
 
     Rule 3: the first led paper minus one. Always low confidence, so it never
     puts anyone in the cohort. It exists so the funnel can say how many people
@@ -159,21 +172,27 @@ def estimate_start(
         if role == LED:
             led_anywhere.append(work.year)
 
-    # Rule 2, taking the earliest qualifying institution: a person who moved
-    # between two faculty jobs started at the first one.
+    # An institution counts as an independent post only if it holds a real share
+    # of this person's led output, judged against their strongest post. Two
+    # papers alone is a stray affiliation as often as it is a job.
+    principal = max((len(y) for y in led_years.values()), default=0)
+    floor = max(MIN_LED_AT_INSTITUTION, PRINCIPAL_LED_SHARE * principal)
+    posts = {ror: years for ror, years in led_years.items() if len(years) >= floor}
+
+    # Earliest first: a person who moved between two faculty jobs started at the
+    # first one.
     qualifying = sorted(
-        (
-            (first_seen[ror], ror, len(years))
-            for ror, years in led_years.items()
-            if len(years) >= MIN_LED_AT_INSTITUTION
-        ),
+        ((first_seen[ror], ror, len(years)) for ror, years in posts.items()),
         key=lambda item: (item[0], item[1]),
     )
     for year, ror, count in qualifying:
+        # The trainee years are anywhere earlier that was not itself a post. It
+        # is not enough to look for an institution with no led papers at all:
+        # one last-author paper during a PhD would hide the real start.
         trainee = [
             other
             for other, seen in first_seen.items()
-            if other != ror and seen < year and not led_years.get(other)
+            if other != ror and seen < year and other not in posts
         ]
         if trainee:
             return StartEstimate(
@@ -194,8 +213,8 @@ def estimate_start(
             confidence=LOW,
             institution_ror=ror,
             led_papers=count,
-            note="no earlier institution without led papers, so the trainee years "
-            "cannot be told apart from the independent ones",
+            note="no earlier institution that was not itself an independent "
+            "post, so the trainee years cannot be told apart from them",
         )
 
     if led_anywhere:
@@ -205,8 +224,8 @@ def estimate_start(
             rule=FIRST_LED_MINUS_ONE,
             confidence=LOW,
             led_papers=len(led_anywhere),
-            note=f"fewer than {MIN_LED_AT_INSTITUTION} led papers at any one "
-            "institution",
+            note="no institution holds enough of their led papers to look "
+            "like a post of their own",
         )
 
     return StartEstimate(

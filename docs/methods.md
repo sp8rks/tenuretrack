@@ -45,7 +45,7 @@ Someone one or two years into the clock may have almost nothing published under 
 
 | Step | Rule | Default |
 |---|---|---|
-| Candidates | Authors with any of the topics, at least 10 works, affiliation in the configured countries | US |
+| Candidates | Authors with any of the topics, at least 10 works, affiliation in the configured countries, excluding the subject | US |
 | Core-topic share | Sum of topic shares over the configured topics | at least 0.4 |
 | University | At least one `education` affiliation | |
 | Plausible years | Byline years could contain a start inside the window | |
@@ -54,7 +54,7 @@ Someone one or two years into the clock may have almost nothing published under 
 | PI-like | At least 3 led journal articles in the window, activity in at least 2 distinct window years | |
 | Identity | Profile does not look merged or fragmented | |
 
-The pool itself comes from one OpenAlex author query: any of the configured topics, more than nine works, and at least one affiliation in the configured countries. It is streamed to `data/pool.jsonl.gz` as it arrives, one person per line, and written through a temporary file so a file that exists is a file that finished. A pool holds names, so `data/` is never committed.
+The subject is removed from their own pool: a distribution someone is being placed against should not contain them. The pool itself comes from one OpenAlex author query: any of the configured topics, more than nine works, and at least one affiliation in the configured countries. It is streamed to `data/pool.jsonl.gz` as it arrives, one person per line, and written through a temporary file so a file that exists is a file that finished. A pool holds names, so `data/` is never committed.
 
 The core-topic share is the main lever on cohort size, and the default is set from a measurement rather than from taste. On a six-topic materials-science subject, a pool of 82,601 US authors left 27,409 people at a share of 0.25, 4,738 at 0.4, and 836 at 0.5. A share of 0.25 admits anyone who does a quarter of their work in the subfield, which is most of a discipline rather than a peer group, and it makes the per-candidate stages that follow cost hours. Raise it for a tighter cohort, lower it for a broader one, and read the funnel to see what the change did.
 
@@ -74,15 +74,17 @@ The authoritative signal would be an employment record. OpenAlex does not carry 
 
 Over the person's journal articles, each paper is classified by their role (led, first-not-led, middle) and by the institutions they carried on it.
 
-**Rule 2, high confidence.** Take the institutions where they have at least two led papers. Order them by the first year the person carried that institution's byline, and take the earliest: someone who moved between two faculty jobs started at the first one. Accept it only when some other institution appears earlier in the record with no led papers at all. That earlier institution is the PhD or postdoc, and its presence is what distinguishes an independent start from a continuation.
+**Rule 2, high confidence.** First decide which institutions look like independent posts. An institution qualifies when it holds at least two of the person's led papers *and* at least a fifth of however many they led at their strongest post. Then order the qualifying institutions by the first year the person carried that byline and take the earliest: someone who moved between two faculty jobs started at the first one. Accept it only when some earlier institution was not itself a qualifying post. That earlier institution is the PhD or postdoc, and its presence is what distinguishes an independent start from a continuation.
+
+Both halves of that come from a measured failure. A flat two-paper bar treats a stray affiliation as equal evidence to a career: one subject with 71 led papers at his university also carried two at a nearby medical centre, and the flat rule dated his start from the medical centre. Judging each institution against the person's own strongest post fixes it without an absolute number, which would not travel between fields. And requiring the earlier institution to have *no* led papers was too brittle, because a single last-author paper during a PhD disqualified the correct answer; what matters is that the earlier place was not itself a post.
 
 **Rule 3, low confidence.** The first led paper minus one. It exists so the funnel can distinguish people who were placed weakly from people who could not be placed at all. Low-confidence estimates never enter the cohort.
 
-Two papers is the bar for "runs a group" because one led paper is a fluke of author ordering. The requirement for an earlier led-free institution is what refuses the ambiguous case: a person whose entire record sits at one institution might be a faculty member who never moved, or a student who stayed, and bylines cannot tell those apart.
+Two papers is the floor for "runs a group" because one led paper is a fluke of author ordering. The requirement for an earlier non-post institution is what refuses the ambiguous case: a person whose entire record sits at one institution might be a faculty member who never moved, or a student who stayed, and bylines cannot tell those apart.
 
 ### 5.3 Known failure modes
 
-A postdoc who published two led papers before starting their faculty job at the same institution gets an estimate that is too early. A person whose PhD institution is missing from OpenAlex bylines is dropped as ambiguous rather than misplaced, which is the intended direction. People who never moved institution are systematically excluded, which biases the cohort toward the mobile.
+A postdoc who published two led papers before starting their faculty job at the same institution gets an estimate that is too early. A person who moved from a short first faculty job to a much more productive second one can have the first job fall below the one-fifth share and be dated from the second, which is the cost of the rule that keeps stray affiliations out. The start year is the first byline year at the institution, and papers lag appointments, so an estimate can sit a year late. A person whose PhD institution is missing from OpenAlex bylines is dropped as ambiguous rather than misplaced, which is the intended direction. People who never moved institution are systematically excluded, which biases the cohort toward the mobile.
 
 ### 5.4 Cost
 

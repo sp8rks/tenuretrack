@@ -475,3 +475,19 @@ def test_the_harvest_says_how_big_it_will_be(tmp_path):
         on_progress=said.append,
     )
     assert any("people to gather" in line for line in said)
+
+
+def test_the_subject_is_not_in_their_own_cohort(config_dict):
+    """You cannot be placed against a distribution that contains you."""
+    config_dict["subject"]["openalex_author_ids"] = ["A1000001"]
+    config = config_for(config_dict)
+    people = [candidate(ident="A1000001"), candidate(ident="A1000002")]
+    kept = screen_pool(people, config, Funnel())
+    assert [p.author_id for p in kept] == ["A1000002"]
+
+
+def test_the_funnel_says_the_subject_was_taken_out(config_dict):
+    config_dict["subject"]["openalex_author_ids"] = ["A1000001"]
+    funnel = Funnel()
+    screen_pool([candidate()], config_for(config_dict), funnel)
+    assert "not the subject themselves" in funnel.steps[0].rule

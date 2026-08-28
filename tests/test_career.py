@@ -440,3 +440,59 @@ def test_build_starts_writes_nothing_into_results(tmp_path, config_dict):
     )
     assert not (tmp_path / "results").exists()
     assert (tmp_path / "data" / STARTS_FILENAME).exists()
+
+
+# ------------------------------------- what a stray affiliation must not do
+
+
+def test_a_stray_affiliation_does_not_outrank_a_real_career():
+    """The measured failure: two led papers at a nearby medical centre beat a
+    university where the same person led seventy-one."""
+    STRAY = "04med00000"
+    record = works(
+        paper(2009, PHD, "first"),
+        *[paper(2014 + i, JOB, "last", ident=f"Wjob{i}") for i in range(10)],
+        paper(2015, STRAY, "last", ident="Wstray1"),
+        paper(2019, STRAY, "last", ident="Wstray2"),
+    )
+    estimate = estimate_start(record, [ME], ARTICLES)
+    assert estimate.institution_ror == JOB
+    assert estimate.year == 2014
+
+
+def test_one_led_paper_during_the_phd_does_not_hide_the_real_start():
+    """Requiring an earlier institution with zero led papers was too brittle:
+    a single last-author paper as a student disqualified the true answer."""
+    record = works(
+        paper(2004, PHD, "first"),
+        paper(2006, PHD, "last"),  # one stray led paper as a student
+        *[paper(2012 + i, JOB, "last", ident=f"Wjob{i}") for i in range(6)],
+    )
+    estimate = estimate_start(record, [ME], ARTICLES)
+    assert estimate.confidence == HIGH
+    assert estimate.year == 2012
+    assert estimate.institution_ror == JOB
+
+
+def test_a_postdoc_with_a_couple_of_led_papers_is_not_a_post():
+    record = works(
+        paper(2009, PHD, "first"),
+        paper(2011, SECOND_JOB, "last", ident="Wpd1"),
+        paper(2012, SECOND_JOB, "last", ident="Wpd2"),
+        *[paper(2014 + i, JOB, "last", ident=f"Wjob{i}") for i in range(12)],
+    )
+    estimate = estimate_start(record, [ME], ARTICLES)
+    assert estimate.institution_ror == JOB
+    assert estimate.year == 2014
+
+
+def test_two_comparable_posts_still_date_from_the_first():
+    """The mover case: comparable output at both jobs keeps the earlier one."""
+    record = works(
+        paper(2004, PHD, "first"),
+        *[paper(2010 + i, JOB, "last", ident=f"Wa{i}") for i in range(5)],
+        *[paper(2019 + i, SECOND_JOB, "last", ident=f"Wb{i}") for i in range(6)],
+    )
+    estimate = estimate_start(record, [ME], ARTICLES)
+    assert estimate.institution_ror == JOB
+    assert estimate.year == 2010

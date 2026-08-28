@@ -446,6 +446,10 @@ def screen_pool(
     cohort = config.cohort
     topic_ids = config.subfield.topic_ids
 
+    # The subject is in the pool whenever their own topics put them there, and
+    # a distribution you are being placed against should not contain you.
+    subject_ids = {a.upper() for a in config.subject.openalex_author_ids}
+
     in_country = on_topic = 0
     kept: list[Candidate] = []
 
@@ -453,6 +457,8 @@ def screen_pool(
     # filtering it in stages would hold every one of them in memory to build a
     # list that the next stage immediately throws most of away.
     for person in candidates:
+        if person.author_id.upper() in subject_ids:
+            continue
         # The API filter already asked for the country, so this normally
         # removes nobody. It runs anyway because a pool gathered under one
         # config can be re-screened under another without refetching.
@@ -469,7 +475,8 @@ def screen_pool(
     funnel.record(
         "candidates",
         f"topics {'|'.join(topic_ids)}, at least {MIN_WORKS} works, "
-        f"an affiliation in {'|'.join(cohort.countries)}",
+        f"an affiliation in {'|'.join(cohort.countries)}, "
+        "not the subject themselves",
         in_country,
     )
     funnel.record(
