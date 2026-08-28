@@ -52,7 +52,11 @@ Someone one or two years into the clock may have almost nothing published under 
 | PI-like | At least 3 led journal articles in the window, activity in at least 2 distinct window years | |
 | Identity | Profile does not look merged or fragmented | |
 
-Counts after every step are written to `results/funnel.csv`. Cohorts under 40 people carry a warning.
+The pool itself comes from one OpenAlex author query: any of the configured topics, more than nine works, and at least one affiliation in the configured countries. It is streamed to `data/pool.jsonl.gz` as it arrives, one person per line, and written through a temporary file so a file that exists is a file that finished. A pool holds names, so `data/` is never committed.
+
+The country rule is applied twice, once in the query and once locally, because a pool gathered under one config can be re-screened under another without refetching. The core-topic share uses the `share` field on the author's topics where OpenAlex provides it, and the same quantity derived from topic work counts where it does not.
+
+Counts after every step are written to `results/funnel.csv`, with columns `step,label,rule,kept,dropped`. That file carries counts and rule text and nothing else, and the guardrail runs on it before it is returned. Cohorts under 40 people carry a warning.
 
 ## 5. Career start estimation
 

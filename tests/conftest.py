@@ -53,3 +53,24 @@ VALID_CONFIG: dict[str, Any] = {
 def config_dict() -> dict[str, Any]:
     """A fresh, valid config mapping that a test can mutate freely."""
     return copy.deepcopy(VALID_CONFIG)
+
+
+@pytest.fixture(autouse=True)
+def _no_real_network(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make a real outbound request fail loudly, in every test.
+
+    Tests drive `httpx.MockTransport`, which never reaches this. Anything that
+    does reach it is a test that would hit api.openalex.org: slow, flaky,
+    dependent on someone's quota, and (for a pool query) potentially tens of
+    thousands of records. Blocking it here turns that mistake into an
+    immediate, readable failure instead of a hang.
+    """
+    import httpx
+
+    def refuse(self, request):  # noqa: ANN001
+        raise AssertionError(
+            f"a test tried to reach {request.url.host} over the real network; "
+            "pass an httpx.MockTransport to the client instead"
+        )
+
+    monkeypatch.setattr(httpx.HTTPTransport, "handle_request", refuse)

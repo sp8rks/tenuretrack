@@ -22,6 +22,7 @@ from tenuretrack.openalex import (
     QuotaExhausted,
     mailto_from_env,
 )
+from tenuretrack.pool import build_pool
 from tenuretrack.subject import InitError, format_result, initialize
 
 app = typer.Typer(
@@ -61,6 +62,11 @@ CACHE_OPTION = typer.Option(
     DEFAULT_CACHE_DIR,
     "--cache-dir",
     help="Where OpenAlex responses are cached, so a rerun repeats no requests.",
+)
+DATA_OPTION = typer.Option(
+    Path("data"),
+    "--data-dir",
+    help="Where the candidate pool is kept. Holds names, so it is never committed.",
 )
 
 
@@ -176,15 +182,43 @@ def _write_config(path: Path, config: dict) -> None:
 
 
 @app.command()
-def run(config_path: Path = CONFIG_OPTION) -> None:
+def run(
+    config_path: Path = CONFIG_OPTION,
+    cache_dir: Path = CACHE_OPTION,
+    data_dir: Path = DATA_OPTION,
+    refresh: bool = typer.Option(
+        False, "--refresh", help="Gather the candidate pool again from scratch."
+    ),
+) -> None:
     """Build the cohort, compute the norms, and write the report."""
     config = _load(config_path)
-    _require_mailto()
-    for problem in config.unresolved():
+    mailto = _require_mailto()
+    problems = config.unresolved()
+    for problem in problems:
         _echo_err(f"config is not ready to run: {problem}")
-    if config.unresolved():
+    if problems:
         raise typer.Exit(code=EXIT_BAD_CONFIG)
-    _not_implemented("run", "tasks 3 to 6")
+
+    with OpenAlexClient(mailto=mailto, cache_dir=cache_dir) as client:
+        try:
+            result = build_pool(
+                client,
+                config,
+                data_dir=data_dir,
+                on_progress=typer.echo,
+                refresh=refresh,
+            )
+        except QuotaExhausted as exc:
+            _echo_err(str(exc))
+            raise typer.Exit(code=EXIT_NETWORK) from exc
+        except OpenAlexError as exc:
+            _echo_err(f"OpenAlex request failed: {exc}")
+            raise typer.Exit(code=EXIT_NETWORK) from exc
+        requests, hits = client.request_count, client.cache_hits
+
+    typer.echo(f"OpenAlex requests: {requests} (served from cache: {hits})")
+    typer.echo(f"{len(result.kept)} candidates carried into career-start estimation.")
+    _not_implemented("everything after the candidate pool", "tasks 4 to 6")
 
 
 @app.command()

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 import yaml
 from typer.testing import CliRunner
@@ -89,12 +91,58 @@ def test_run_refuses_an_unresolved_config(monkeypatch, tmp_path, config_dict):
     assert "subfield.topics is empty" in text(result)
 
 
-def test_run_reports_the_stage_that_is_not_built_yet(monkeypatch, tmp_path, config_dict):
+def patch_pool(monkeypatch, outcome):
+    """Point `run` at a fake client and a canned pool stage."""
+    import tenuretrack.cli as cli
+
+    monkeypatch.setattr(cli, "OpenAlexClient", lambda **_kwargs: FakeClient())
+
+    def stage(_client, _config, **_kwargs):
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+    monkeypatch.setattr(cli, "build_pool", stage)
+
+
+def fake_pool(kept=3):
+    from tenuretrack.pool import Funnel, PoolResult
+
+    funnel = Funnel()
+    funnel.record("candidates", "topics", 100)
+    funnel.record("university", "education", kept)
+    return PoolResult(
+        pool_size=100,
+        kept=tuple(range(kept)),
+        funnel=funnel,
+        pool_path=Path("data/pool.jsonl.gz"),
+        funnel_path=Path("results/funnel.csv"),
+    )
+
+
+def test_run_builds_the_pool_then_reports_what_is_not_built_yet(
+    monkeypatch, tmp_path, config_dict
+):
     monkeypatch.setenv(MAILTO_ENV_VAR, "tester@example.edu")
+    patch_pool(monkeypatch, fake_pool(kept=7))
     path = write_config(tmp_path, config_dict)
     result = runner.invoke(app, ["run", "--config", str(path)])
     assert result.exit_code == EXIT_NOT_IMPLEMENTED
-    assert "not implemented yet" in text(result)
+    out = text(result)
+    assert "7 candidates carried into career-start estimation" in out
+    assert "not implemented yet" in out
+
+
+def test_run_exits_separately_when_the_quota_runs_out(monkeypatch, tmp_path, config_dict):
+    from tenuretrack.cli import EXIT_NETWORK
+    from tenuretrack.openalex import QuotaExhausted
+
+    monkeypatch.setenv(MAILTO_ENV_VAR, "tester@example.edu")
+    patch_pool(monkeypatch, QuotaExhausted("https://api.openalex.org/authors", 7200.0))
+    path = write_config(tmp_path, config_dict)
+    result = runner.invoke(app, ["run", "--config", str(path)])
+    assert result.exit_code == EXIT_NETWORK
+    assert "rerunning repeats no requests" in text(result)
 
 
 @pytest.mark.parametrize("command", ["chaperone", "slides", "show-cohort"])
