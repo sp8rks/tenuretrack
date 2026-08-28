@@ -46,13 +46,15 @@ Someone one or two years into the clock may have almost nothing published under 
 | Step | Rule | Default |
 |---|---|---|
 | Candidates | Authors with any of the topics, at least 10 works, affiliation in the configured countries | US |
-| Core-topic share | Sum of topic shares over the configured topics | at least 0.25 |
+| Core-topic share | Sum of topic shares over the configured topics | at least 0.4 |
 | University | At least one `education` affiliation | |
 | Fresh start | Estimated first independent appointment inside the cohort window | 2008 to 2018 |
 | PI-like | At least 3 led journal articles in the window, activity in at least 2 distinct window years | |
 | Identity | Profile does not look merged or fragmented | |
 
 The pool itself comes from one OpenAlex author query: any of the configured topics, more than nine works, and at least one affiliation in the configured countries. It is streamed to `data/pool.jsonl.gz` as it arrives, one person per line, and written through a temporary file so a file that exists is a file that finished. A pool holds names, so `data/` is never committed.
+
+The core-topic share is the main lever on cohort size, and the default is set from a measurement rather than from taste. On a six-topic materials-science subject, a pool of 82,601 US authors left 27,409 people at a share of 0.25, 4,738 at 0.4, and 836 at 0.5. A share of 0.25 admits anyone who does a quarter of their work in the subfield, which is most of a discipline rather than a peer group, and it makes the per-candidate stages that follow cost hours. Raise it for a tighter cohort, lower it for a broader one, and read the funnel to see what the change did.
 
 The country rule is applied twice, once in the query and once locally, because a pool gathered under one config can be re-screened under another without refetching. The core-topic share uses the `share` field on the author's topics where OpenAlex provides it, and the same quantity derived from topic work counts where it does not.
 

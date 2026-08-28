@@ -24,10 +24,11 @@ import re
 import unicodedata
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from tenuretrack.config import MAX_TOPICS, ROR_RE, CohortSpec, OutputSpec
-from tenuretrack.openalex import OpenAlexClient, OpenAlexHTTPError
+from tenuretrack.openalex import OpenAlexClient, OpenAlexError, OpenAlexHTTPError
+from tenuretrack.pool import estimate_pool_size
 
 __all__ = [
     "Byline",
@@ -37,6 +38,7 @@ __all__ = [
     "TopicProposal",
     "Work",
     "draft_config",
+    "measure_reach",
     "fetch_works",
     "find_split_profiles",
     "format_result",
@@ -90,6 +92,13 @@ says the record is thin."""
 
 WANTED_TOPICS = 4
 TOP_VENUES_PER_TOPIC = 3
+
+LOPSIDED_TOPIC_SHARE = 0.4
+"""Flag a topic contributing more than this much of the whole set's reach.
+
+One topic carrying nearly half the people, while carrying a handful of the
+subject's papers, is the signature of a neighboring community rather than a
+subfield."""
 
 SPLIT_MAX_WORKS = 10
 SPLIT_MAX_SHARE = 0.5
@@ -174,6 +183,14 @@ class TopicProposal:
     papers: int
     subfield: str = ""
     venues: tuple[str, ...] = ()
+    reach: int | None = None
+    """People OpenAlex lists in this topic who could enter the cohort.
+
+    How central a topic is to the subject says nothing about how many people it
+    drags in. On one measured subject, the two topics carrying the fewest of
+    their papers contributed 58,000 of an 82,601 pool. Showing this next to the
+    paper count is what makes the topic choice an informed one.
+    """
 
     def share_of(self, total: int) -> float:
         return self.papers / total if total else 0.0
@@ -195,6 +212,7 @@ class InitResult:
     works_seen: int = 0
     window_works: int = 0
     fetched_from: int = 0
+    combined_reach: int | None = None
     basis: str = "anchored"
     current_career_year: int = 1
     notes: tuple[str, ...] = ()
@@ -682,6 +700,8 @@ def initialize(
             "linked to very few indexed papers."
         )
 
+    topics, combined_reach = measure_reach(client, topics, defaults.countries)
+
     result = InitResult(
         subject_name=str(author.get("display_name") or ""),
         author_id=primary_id,
@@ -695,6 +715,7 @@ def initialize(
         works_seen=len(works),
         window_works=len(window),
         fetched_from=first_year,
+        combined_reach=combined_reach,
         basis=basis,
         current_career_year=this_year - start_year + 1,
         notes=tuple(
@@ -751,6 +772,46 @@ def _notes(
             f"The proposal rests on {len(window)} paper(s), which is thin. Read the "
             "topic list closely."
         )
+    reaches = [t for t in topics if t.reach is not None]
+    if reaches:
+        widest = max(reaches, key=lambda t: t.reach or 0)
+        total = sum(t.reach or 0 for t in reaches)
+        if total and (widest.reach or 0) > LOPSIDED_TOPIC_SHARE * total:
+            yield (
+                f"{widest.id} ({widest.name}) alone brings in "
+                f"{widest.reach:,} of those people while carrying "
+                f"{widest.papers} of your papers. A topic that wide usually means "
+                "a neighboring community, and dropping it is the cheapest way to "
+                "make the run shorter and the cohort closer to your own."
+            )
+
+
+def measure_reach(
+    client: OpenAlexClient,
+    proposals: Sequence[TopicProposal],
+    countries: Sequence[str],
+) -> tuple[tuple[TopicProposal, ...], int | None]:
+    """Ask how many people each proposed topic would put in the cohort.
+
+    One request per topic, plus one for the set. That is a handful of requests
+    against a stage that already made a dozen, and it is the only number at
+    `init` time that predicts what the long stage will cost.
+
+    A failure here loses the annotation, not the proposal: the topics are still
+    correct without it, and refusing to finish `init` over a progress nicety
+    would be the wrong trade.
+    """
+    annotated: list[TopicProposal] = []
+    try:
+        for proposal in proposals:
+            reach = estimate_pool_size(client, [proposal.id], countries)
+            annotated.append(replace(proposal, reach=reach))
+        combined = estimate_pool_size(
+            client, [p.id for p in proposals], countries
+        )
+    except OpenAlexError:
+        return tuple(proposals), None
+    return tuple(annotated), combined
 
 
 def draft_config(result: InitResult) -> dict:
@@ -828,6 +889,14 @@ def format_result(result: InitResult) -> str:
         )
         if topic.venues:
             lines.append(f"       your venues here: {', '.join(topic.venues)}")
+        if topic.reach is not None:
+            lines.append(f"       people this topic brings in: {topic.reach:,}")
+    if result.combined_reach is not None:
+        lines.append("")
+        lines.append(
+            f"All {len(result.topics)} together put {result.combined_reach:,} people "
+            "in front of the filters."
+        )
     if result.notes:
         lines.append("")
         lines.append("Worth reading before you run:")

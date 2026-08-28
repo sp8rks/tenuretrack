@@ -21,7 +21,7 @@ The full written method lives in `docs/methods.md` and must stay in sync with th
 Emit a count after every step to `results/funnel.csv`.
 
 1. **Candidate pool**: authors with `topics.id` in the configured topic set, `works_count >= 10`, affiliation country in `countries` (default `["US"]`).
-2. **Core-topic share**: sum of `topics[].share` (or count-weighted) over the configured topics is at least `core_topic_share_min` (default 0.25). This is the main lever for cohort tightness.
+2. **Core-topic share**: sum of `topics[].share` (or count-weighted) over the configured topics is at least `core_topic_share_min` (default 0.4). This is the main lever for cohort tightness: on a measured six-topic pool of 82,601 authors it left 27,409 people at 0.25, 4,738 at 0.4, and 836 at 0.5.
 3. **University**: at least one affiliation with `institution.type == "education"`. Drop industry, government lab, and hospital-only profiles. National-lab-plus-university people stay.
 4. **Fresh tenure-track-shaped start** in the cohort window (default 2008 to 2018). See career start below. Drop anyone whose start cannot be estimated with confidence.
 5. **PI-like headline cohort**: at least `min_led_papers` (default 3) led journal articles in the window and at least one paper in each of two distinct window years. This removes long-term postdocs, staff scientists, and profile fragments.

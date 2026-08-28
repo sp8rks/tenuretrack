@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import re
+from dataclasses import replace
 
 import httpx
 import pytest
@@ -18,6 +19,10 @@ from tenuretrack.guardrail import PRESCRIPTIVE_TERMS
 from tenuretrack.openalex import OpenAlexClient
 from tenuretrack.subject import (
     InitError,
+    InitResult,
+    Institution,
+    TopicProposal,
+    _notes,
     draft_config,
     fetch_works,
     format_result,
@@ -25,6 +30,7 @@ from tenuretrack.subject import (
     initialize,
     is_journal_article,
     is_split_profile,
+    measure_reach,
     parse_work,
     propose_topics,
     resolve_author,
@@ -704,3 +710,105 @@ def test_draft_config_matches_the_documented_schema(tmp_path):
     config = draft_config(result_for(tmp_path))
     assert set(config) == {"subject", "subfield", "cohort", "output"}
     build_config(config)  # raises if a key or a value is wrong
+
+
+# -------------------------------------------------- how wide each topic reaches
+
+
+def counting_client(tmp_path, counts, fail=False):
+    """A mock that answers the pool-size question with a canned count."""
+
+    def route(request):
+        if fail:
+            return 500
+        url = str(request.url)
+        for topic_id, count in counts.items():
+            if topic_id in url:
+                return {"results": [], "meta": {"count": count}}
+        return {"results": [], "meta": {"count": 0}}
+
+    return Router({"/authors": route}).client(tmp_path)
+
+
+def proposals(*pairs):
+    return tuple(
+        TopicProposal(id=tid, name=f"Name {tid}", papers=papers) for tid, papers in pairs
+    )
+
+
+def test_each_topic_is_annotated_with_how_many_people_it_brings(tmp_path):
+    client = counting_client(tmp_path, {"T10001": 500, "T10002": 9000})
+    annotated, combined = measure_reach(
+        client, proposals(("T10001", 20), ("T10002", 3)), ["US"]
+    )
+    assert [t.reach for t in annotated] == [500, 9000]
+    # The combined query names both topics, so the first match wins the stub.
+    assert combined == 500
+
+
+def test_measuring_reach_costs_one_request_per_topic_plus_one(tmp_path):
+    client = counting_client(tmp_path, {"T10001": 5, "T10002": 5, "T10003": 5})
+    measure_reach(
+        client, proposals(("T10001", 9), ("T10002", 8), ("T10003", 7)), ["US"]
+    )
+    assert client.request_count == 4
+
+
+def test_a_failed_measurement_loses_the_annotation_not_the_proposal(tmp_path):
+    client = counting_client(tmp_path, {}, fail=True)
+    original = proposals(("T10001", 20))
+    annotated, combined = measure_reach(client, original, ["US"])
+    assert annotated == original
+    assert combined is None
+
+
+def test_the_printout_shows_what_each_topic_brings_in(tmp_path):
+    client = counting_client(tmp_path, {"T10001": 7341, "T10002": 36434})
+    annotated, combined = measure_reach(
+        client, proposals(("T10001", 33), ("T10002", 4)), ["US"]
+    )
+    result = InitResult(
+        subject_name="Jane Doe",
+        author_id="A100",
+        institution=Institution(ror=ROR, name="University of X"),
+        start_year=2019,
+        topics=annotated,
+        label="chemistry",
+        window_works=40,
+        combined_reach=43775,
+    )
+    text = format_result(result)
+    assert "people this topic brings in: 7,341" in text
+    assert "43,775 people in front of the filters" in text
+
+
+def test_a_topic_that_dwarfs_the_others_is_called_out(tmp_path):
+    router = full_router()
+    result = initialize(
+        router.client(tmp_path),
+        orcid=ORCID,
+        institution=ROR,
+        start_year=2019,
+        today=TODAY,
+    )
+    lopsided = replace(
+        result,
+        topics=(
+            replace(result.topics[0], reach=1000, papers=30),
+            replace(result.topics[1], reach=40000, papers=3),
+        ),
+    )
+    notes = list(
+        _notes(
+            lopsided.institution,
+            (),
+            (),
+            [],
+            "anchored",
+            lopsided.topics,
+            2019,
+        )
+    )
+    joined = " ".join(notes)
+    assert "40,000" in joined
+    assert "neighboring community" in joined

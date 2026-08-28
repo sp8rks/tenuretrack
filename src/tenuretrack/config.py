@@ -129,7 +129,7 @@ class CohortSpec:
     horizon_years: int = 6
     countries: tuple[str, ...] = ("US",)
     institution_types: tuple[str, ...] = ("education",)
-    core_topic_share_min: float = 0.25
+    core_topic_share_min: float = 0.4
     min_led_papers: int = 3
     min_cell_size: int = 5
     bootstrap_iterations: int = 2000
