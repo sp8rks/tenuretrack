@@ -207,3 +207,37 @@ def test_a_clean_deck_passes(tmp_path):
 def test_committed_example_results_are_aggregates_only(results_dir):
     """Runs on every committed example results directory, on every CI run."""
     assert_directory_aggregates_only(results_dir)
+
+
+# ------------------------------------------------ the committed example output
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+EXAMPLES = REPO_ROOT / "examples"
+
+
+@pytest.mark.parametrize(
+    "example", sorted(p.name for p in EXAMPLES.iterdir() if p.is_dir())
+)
+def test_committed_example_results_are_aggregates_only(example):
+    """CLAUDE.md rule 1, enforced on the files actually in the repository.
+
+    These directories are committed and public. If one of them ever carries a
+    cohort member's name or ID, it is already published by the time anyone
+    notices, so the check belongs in the suite rather than in a review.
+    """
+    results = EXAMPLES / example / "results"
+    if not results.is_dir():
+        pytest.skip(f"{example} has not been run yet")
+    assert_directory_aggregates_only(results)
+
+
+@pytest.mark.parametrize(
+    "example", sorted(p.name for p in EXAMPLES.iterdir() if p.is_dir())
+)
+def test_committed_examples_carry_no_private_data(example):
+    """`data/` and `.cache/` hold names and must never be committed."""
+    for forbidden in ("data", ".cache"):
+        assert not (EXAMPLES / example / forbidden).exists(), (
+            f"{example}/{forbidden} would publish cohort members' names"
+        )

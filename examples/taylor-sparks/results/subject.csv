@@ -1,0 +1,8 @@
+career_year,compared_at,metric,label,value,cohort_p25,cohort_p50,cohort_p75,position,compared
+14,6,pubs,Journal articles,35,14,23,38,between the median and p75,yes
+14,6,led,Led articles (last or corresponding),17,3,6,12,above p75,yes
+14,6,lead_share,Share of articles led,0.49,0.16,0.29,0.50,between the median and p75,yes
+14,6,citations,Citations to those articles,2593,410,942,2128,not compared,no
+14,6,h_index,h-index over those articles,22,9,14,21,above p75,yes
+14,6,venue_impact_median,Median venue impact,4.91,3.26,4.17,5.87,between the median and p75,yes
+14,6,top_quartile_share,Share in top-quartile venues,0.17,0.09,0.21,0.36,between p25 and the median,yes
