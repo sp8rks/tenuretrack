@@ -513,8 +513,6 @@ def build_pool(
     funnel_path = funnel.write_csv(results / FUNNEL_FILENAME)
 
     if on_progress:
-        for step in funnel.steps:
-            on_progress(f"  {step.step}. {step.label}: {step.kept} left ({step.dropped} out)")
         on_progress(f"Wrote {funnel_path}.")
     return PoolResult(
         pool_size=size,

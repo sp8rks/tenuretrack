@@ -91,32 +91,38 @@ def test_run_refuses_an_unresolved_config(monkeypatch, tmp_path, config_dict):
     assert "subfield.topics is empty" in text(result)
 
 
-def patch_pool(monkeypatch, outcome):
-    """Point `run` at a fake client and a canned pool stage."""
+def patch_pool(monkeypatch, outcome, members=(), tmp_path=None):
+    """Point `run` at a fake client and canned pool and career stages."""
     import tenuretrack.cli as cli
 
     monkeypatch.setattr(cli, "OpenAlexClient", lambda **_kwargs: FakeClient())
 
-    def stage(_client, _config, **_kwargs):
+    def pool_stage(_client, _config, **_kwargs):
         if isinstance(outcome, Exception):
             raise outcome
         return outcome
 
-    monkeypatch.setattr(cli, "build_pool", stage)
+    def career_stage(_client, _candidates, _config, funnel, **_kwargs):
+        funnel.record("start in window", "estimated start in the window", len(members))
+        return list(members)
+
+    monkeypatch.setattr(cli, "build_pool", pool_stage)
+    monkeypatch.setattr(cli, "build_starts", career_stage)
 
 
-def fake_pool(kept=3):
+def fake_pool(kept=3, tmp_path=None):
     from tenuretrack.pool import Funnel, PoolResult
 
     funnel = Funnel()
     funnel.record("candidates", "topics", 100)
     funnel.record("university", "education", kept)
+    results = Path(tmp_path) / "results" if tmp_path else Path("results")
     return PoolResult(
         pool_size=100,
         kept=tuple(range(kept)),
         funnel=funnel,
         pool_path=Path("data/pool.jsonl.gz"),
-        funnel_path=Path("results/funnel.csv"),
+        funnel_path=results / "funnel.csv",
     )
 
 
@@ -124,13 +130,15 @@ def test_run_builds_the_pool_then_reports_what_is_not_built_yet(
     monkeypatch, tmp_path, config_dict
 ):
     monkeypatch.setenv(MAILTO_ENV_VAR, "tester@example.edu")
-    patch_pool(monkeypatch, fake_pool(kept=7))
+    patch_pool(monkeypatch, fake_pool(kept=7, tmp_path=tmp_path), members=range(4))
     path = write_config(tmp_path, config_dict)
     result = runner.invoke(app, ["run", "--config", str(path)])
     assert result.exit_code == EXIT_NOT_IMPLEMENTED
     out = text(result)
-    assert "7 candidates carried into career-start estimation" in out
+    assert "4 people placed on the tenure clock" in out
+    assert "Funnel:" in out
     assert "not implemented yet" in out
+    assert (tmp_path / "results" / "funnel.csv").exists()
 
 
 def test_run_exits_separately_when_the_quota_runs_out(monkeypatch, tmp_path, config_dict):

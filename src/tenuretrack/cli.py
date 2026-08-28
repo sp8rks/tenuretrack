@@ -13,6 +13,7 @@ import typer
 import yaml
 
 from tenuretrack import __version__
+from tenuretrack.career import build_starts
 from tenuretrack.config import Config, ConfigError, load_config
 from tenuretrack.openalex import (
     DEFAULT_CACHE_DIR,
@@ -208,7 +209,21 @@ def run(
                 on_progress=typer.echo,
                 refresh=refresh,
             )
+            members = build_starts(
+                client,
+                result.kept,
+                config,
+                result.funnel,
+                data_dir=data_dir,
+                on_progress=typer.echo,
+                refresh=refresh,
+            )
         except QuotaExhausted as exc:
+            # Everything fetched is cached and the funnel so far is on disk, so
+            # the rerun picks up here rather than starting over.
+            result_so_far = locals().get("result")
+            if result_so_far is not None:
+                result_so_far.funnel.write_csv(result_so_far.funnel_path)
             _echo_err(str(exc))
             raise typer.Exit(code=EXIT_NETWORK) from exc
         except OpenAlexError as exc:
@@ -216,9 +231,20 @@ def run(
             raise typer.Exit(code=EXIT_NETWORK) from exc
         requests, hits = client.request_count, client.cache_hits
 
+    result.funnel.write_csv(result.funnel_path)
+    _echo_funnel(result.funnel)
     typer.echo(f"OpenAlex requests: {requests} (served from cache: {hits})")
-    typer.echo(f"{len(result.kept)} candidates carried into career-start estimation.")
-    _not_implemented("everything after the candidate pool", "tasks 4 to 6")
+    typer.echo(f"{len(members)} people placed on the tenure clock.")
+    _not_implemented("the metrics and the report", "tasks 5 and 6")
+
+
+def _echo_funnel(funnel) -> None:
+    typer.echo("")
+    typer.echo("Funnel:")
+    for step in funnel.steps:
+        typer.echo(
+            f"  {step.step}. {step.label}: {step.kept} left ({step.dropped} out)"
+        )
 
 
 @app.command()

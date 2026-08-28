@@ -48,7 +48,9 @@ Someone one or two years into the clock may have almost nothing published under 
 | Candidates | Authors with any of the topics, at least 10 works, affiliation in the configured countries | US |
 | Core-topic share | Sum of topic shares over the configured topics | at least 0.4 |
 | University | At least one `education` affiliation | |
-| Fresh start | Estimated first independent appointment inside the cohort window | 2008 to 2018 |
+| Plausible years | Byline years could contain a start inside the window | |
+| Career start | A confident first independent start could be estimated | |
+| Start in window | That estimate falls inside the cohort window | 2008 to 2018 |
 | PI-like | At least 3 led journal articles in the window, activity in at least 2 distinct window years | |
 | Identity | Profile does not look merged or fragmented | |
 
@@ -56,19 +58,37 @@ The pool itself comes from one OpenAlex author query: any of the configured topi
 
 The core-topic share is the main lever on cohort size, and the default is set from a measurement rather than from taste. On a six-topic materials-science subject, a pool of 82,601 US authors left 27,409 people at a share of 0.25, 4,738 at 0.4, and 836 at 0.5. A share of 0.25 admits anyone who does a quarter of their work in the subfield, which is most of a discipline rather than a peer group, and it makes the per-candidate stages that follow cost hours. Raise it for a tighter cohort, lower it for a broader one, and read the funnel to see what the change did.
 
-The country rule is applied twice, once in the query and once locally, because a pool gathered under one config can be re-screened under another without refetching. The core-topic share uses the `share` field on the author's topics where OpenAlex provides it, and the same quantity derived from topic work counts where it does not.
+The country rule is applied twice, once in the query and once locally, because a pool gathered under one config can be re-screened under another without refetching. The core-topic share is derived from the work counts on the author's topics. OpenAlex does not publish a per-author topic share: entries under `topics` carry `count` and no share, and the separate `topic_share` field is a different quantity, the author's share of that topic's global output, which for one person sums to about 0.001. Using it here would be a category error. The code reads a `share` field if one ever appears and falls back to counts, which is the path that runs today.
 
 Counts after every step are written to `results/funnel.csv`, with columns `step,label,rule,kept,dropped`. That file carries counts and rule text and nothing else, and the guardrail runs on it before it is returned. Cohorts under 40 people carry a warning.
 
 ## 5. Career start estimation
 
-For cohort members, the start year is estimated (the subject's is supplied):
+The subject's start year is supplied and trusted. Every cohort member's is inferred from bylines, and this is the weakest link in the method: a wrong start year moves someone to the wrong career year and corrupts the norms without any visible symptom. The rule is therefore strict, and anyone it cannot place confidently is dropped and counted rather than guessed at.
 
-1. ORCID employment record if present in OpenAlex.
-2. First year at an institution where the person subsequently has at least two led papers and which differs from the institution of their earlier first-author-only years.
-3. Fallback: year of first led paper minus one.
+### 5.1 What OpenAlex does not have
 
-Only rules 1 and 2 produce high-confidence starts; only high-confidence people enter the headline cohort. The cohort window (2008 to 2018) guarantees every member has completed at least six career years by the time of analysis.
+The authoritative signal would be an employment record. OpenAlex does not carry one. An author record has `affiliations`, whose years are derived from paper bylines, and `last_known_institutions`; there is no appointment, title, or employment field. This was checked against the live API. So the rule below works entirely from bylines, and the tool does not claim an employment-record rule it cannot run.
+
+### 5.2 The rule
+
+Over the person's journal articles, each paper is classified by their role (led, first-not-led, middle) and by the institutions they carried on it.
+
+**Rule 2, high confidence.** Take the institutions where they have at least two led papers. Order them by the first year the person carried that institution's byline, and take the earliest: someone who moved between two faculty jobs started at the first one. Accept it only when some other institution appears earlier in the record with no led papers at all. That earlier institution is the PhD or postdoc, and its presence is what distinguishes an independent start from a continuation.
+
+**Rule 3, low confidence.** The first led paper minus one. It exists so the funnel can distinguish people who were placed weakly from people who could not be placed at all. Low-confidence estimates never enter the cohort.
+
+Two papers is the bar for "runs a group" because one led paper is a fluke of author ordering. The requirement for an earlier led-free institution is what refuses the ambiguous case: a person whose entire record sits at one institution might be a faculty member who never moved, or a student who stayed, and bylines cannot tell those apart.
+
+### 5.3 Known failure modes
+
+A postdoc who published two led papers before starting their faculty job at the same institution gets an estimate that is too early. A person whose PhD institution is missing from OpenAlex bylines is dropped as ambiguous rather than misplaced, which is the intended direction. People who never moved institution are systematically excluded, which biases the cohort toward the mobile.
+
+### 5.4 Cost
+
+Estimating a start needs the person's papers, which is the most expensive stage in the pipeline. Works are requested fifty authors at a time, so the request count tracks the number of pages the results fill rather than the number of people. Before any request, candidates whose byline years could not contain a start inside the window are dropped: that pre-filter only removes people whose rule-2 estimate could not land in the window anyway, so it saves requests without changing who ends up in the cohort.
+
+The cohort window (2008 to 2018) guarantees every member has completed at least six career years by the time of analysis.
 
 ## 6. Metrics
 

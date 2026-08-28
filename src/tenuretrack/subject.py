@@ -29,6 +29,16 @@ from dataclasses import dataclass, field, replace
 from tenuretrack.config import MAX_TOPICS, ROR_RE, CohortSpec, OutputSpec
 from tenuretrack.openalex import OpenAlexClient, OpenAlexError, OpenAlexHTTPError
 from tenuretrack.pool import estimate_pool_size
+from tenuretrack.works import (
+    Byline,
+    Work,
+    fetch_works,
+    has_byline_at,
+    is_journal_article,
+    parse_work,
+)
+from tenuretrack.works import short_author_id as _short_author_id
+from tenuretrack.works import short_topic_id as _short_topic_id
 
 __all__ = [
     "Byline",
@@ -59,10 +69,6 @@ __all__ = [
 AUTHORS_SELECT = (
     "id,display_name,display_name_alternatives,orcid,affiliations,topics,"
     "summary_stats,works_count"
-)
-WORKS_SELECT = (
-    "id,doi,title,publication_year,type,authorships,primary_location,"
-    "primary_topic,cited_by_count"
 )
 INSTITUTIONS_SELECT = "id,ror,display_name,country_code,type,works_count"
 
@@ -106,8 +112,6 @@ SPLIT_MAX_SHARE = 0.5
 profiles that both carry substantial output are two people until proven
 otherwise, so they are never unioned."""
 
-PREPRINT_SOURCE_TYPES = frozenset({"repository"})
-
 _NAME_SUFFIXES = frozenset({"jr", "sr", "ii", "iii", "iv", "phd", "md"})
 _PUNCTUATION = re.compile(r"[^\w\s]")
 _WHITESPACE = re.compile(r"\s+")
@@ -131,47 +135,6 @@ class Institution:
     @property
     def short_ror(self) -> str:
         return self.ror.rstrip("/").rsplit("/", 1)[-1]
-
-
-@dataclass(frozen=True)
-class Byline:
-    """One person's line on one paper."""
-
-    author_id: str
-    position: str = ""
-    is_corresponding: bool = False
-    institution_rors: tuple[str, ...] = ()
-
-
-@dataclass(frozen=True)
-class Work:
-    """The parts of an OpenAlex work this tool actually reads."""
-
-    id: str
-    year: int
-    doi: str = ""
-    title: str = ""
-    type: str = ""
-    source_id: str = ""
-    source_name: str = ""
-    source_type: str = ""
-    topic_id: str = ""
-    topic_name: str = ""
-    topic_subfield: str = ""
-    cited_by_count: int = 0
-    bylines: tuple[Byline, ...] = ()
-
-    @property
-    def key(self) -> str:
-        """Identity for unioning split profiles.
-
-        The DOI when there is one. Otherwise a normalized title plus year,
-        which catches the same paper appearing under two author IDs and is
-        conservative enough not to merge two different papers.
-        """
-        if self.doi:
-            return self.doi
-        return f"{_normalize_title(self.title)}|{self.year}"
 
 
 @dataclass(frozen=True)
@@ -217,33 +180,6 @@ class InitResult:
     current_career_year: int = 1
     notes: tuple[str, ...] = ()
     config: Mapping[str, object] = field(default_factory=dict)
-
-
-# ------------------------------------------------------------ pure: filtering
-
-
-def is_journal_article(work: Work, article_types: Sequence[str]) -> bool:
-    """A journal article, not a preprint, editorial, chapter, or erratum.
-
-    The same rule runs on the subject and on every cohort member, because a
-    comparison where one side counts preprints is not a comparison.
-    """
-    if work.type not in set(article_types):
-        return False
-    return work.source_type not in PREPRINT_SOURCE_TYPES
-
-
-def has_byline_at(work: Work, author_ids: Iterable[str], ror: str) -> bool:
-    """Did this person carry that institution's byline on this paper?"""
-    wanted = {a.upper() for a in author_ids}
-    short = ror.rstrip("/").rsplit("/", 1)[-1].lower()
-    for byline in work.bylines:
-        if byline.author_id.upper() not in wanted:
-            continue
-        for candidate in byline.institution_rors:
-            if candidate.rstrip("/").rsplit("/", 1)[-1].lower() == short:
-                return True
-    return False
 
 
 def select_window_works(
@@ -447,75 +383,6 @@ def _topic_ids(record: Mapping) -> set[str]:
     return out
 
 
-# -------------------------------------------------------------- pure: parsing
-
-
-def parse_work(raw: Mapping) -> Work:
-    """Trim an OpenAlex work down to the fields this tool reads."""
-    location = raw.get("primary_location") or {}
-    source = location.get("source") or {}
-    topic = raw.get("primary_topic") or {}
-    subfield = (topic.get("subfield") or {}).get("display_name") or ""
-
-    bylines = []
-    for authorship in raw.get("authorships") or []:
-        author = (authorship or {}).get("author") or {}
-        author_id = _short_author_id(author.get("id"))
-        if not author_id:
-            continue
-        rors = tuple(
-            str(inst.get("ror"))
-            for inst in (authorship.get("institutions") or [])
-            if isinstance(inst, dict) and inst.get("ror")
-        )
-        bylines.append(
-            Byline(
-                author_id=author_id,
-                position=str(authorship.get("author_position") or ""),
-                is_corresponding=bool(authorship.get("is_corresponding")),
-                institution_rors=rors,
-            )
-        )
-
-    year = raw.get("publication_year")
-    return Work(
-        id=str(raw.get("id") or ""),
-        year=int(year) if isinstance(year, int) and not isinstance(year, bool) else 0,
-        doi=_normalize_doi(raw.get("doi")),
-        title=str(raw.get("title") or ""),
-        type=str(raw.get("type") or ""),
-        source_id=str(source.get("id") or ""),
-        source_name=str(source.get("display_name") or ""),
-        source_type=str(source.get("type") or ""),
-        topic_id=_short_topic_id(topic.get("id")),
-        topic_name=str(topic.get("display_name") or ""),
-        topic_subfield=str(subfield),
-        cited_by_count=int(raw.get("cited_by_count") or 0),
-        bylines=tuple(bylines),
-    )
-
-
-def _normalize_title(title: str) -> str:
-    return _WHITESPACE.sub(" ", _PUNCTUATION.sub(" ", (title or "").lower())).strip()
-
-
-def _normalize_doi(value: object) -> str:
-    text = str(value or "").strip().lower()
-    if not text:
-        return ""
-    return text.rsplit("doi.org/", 1)[-1]
-
-
-def _short_author_id(value: object) -> str:
-    text = str(value or "").strip().rstrip("/").rsplit("/", 1)[-1].upper()
-    return text if re.fullmatch(r"A\d+", text) else ""
-
-
-def _short_topic_id(value: object) -> str:
-    text = str(value or "").strip().rstrip("/").rsplit("/", 1)[-1].upper()
-    return text if re.fullmatch(r"T\d+", text) else ""
-
-
 def _short_orcid(value: object) -> str:
     text = str(value or "").strip().rstrip("/").rsplit("/", 1)[-1].upper()
     return text if re.fullmatch(r"\d{4}-\d{4}-\d{4}-\d{3}[\dX]", text) else ""
@@ -633,29 +500,6 @@ def find_split_profiles(
         for candidate in (page.get("results") or [])
         if is_split_profile(primary, candidate, ror)
     ]
-
-
-def fetch_works(
-    client: OpenAlexClient,
-    author_ids: Sequence[str],
-    first_year: int,
-    last_year: int,
-) -> list[Work]:
-    """Every work by any of these author IDs, unioned by DOI."""
-    unioned: dict[str, Work] = {}
-    for author_id in author_ids:
-        filters = (
-            f"authorships.author.id:{author_id},"
-            f"publication_year:{first_year}-{last_year}"
-        )
-        for raw in client.paginate(
-            "/works", {"filter": filters, "select": WORKS_SELECT}
-        ):
-            work = parse_work(raw)
-            if not work.year:
-                continue
-            unioned.setdefault(work.key, work)
-    return sorted(unioned.values(), key=lambda w: (-w.year, w.title, w.id))
 
 
 # -------------------------------------------------------------- orchestration
