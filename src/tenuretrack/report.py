@@ -302,6 +302,7 @@ def write_report(
     horizon: int,
     career_year: int,
     final_year_incomplete: bool,
+    extension: int = 0,
     placements: Sequence[SubjectPlacement],
     rows: Sequence[Quartiles],
     venues: Sequence[tuple[str, int, float | None, bool]],
@@ -320,8 +321,18 @@ def write_report(
         "",
         f"{subject.name} began a tenure-line appointment at "
         f"{subject.institution_name} in {subject.start_year}, which makes this "
-        f"career year {career_year}.",
+        f"calendar year {career_year} of the appointment.",
     ]
+    if extension:
+        window_end = subject.start_year + horizon + extension - 1
+        lines.append(
+            f"The clock was stopped for {extension} year(s), so this is year "
+            f"{horizon} of the tenure clock and the comparison happens there. "
+            f"Papers are counted across {subject.start_year} to {window_end}, "
+            "all the calendar years available, because stopping a clock grants "
+            "time rather than removing the work done in it. Cohort members at "
+            f"year {horizon} had {horizon} calendar years."
+        )
     if final_year_incomplete:
         lines.append(
             f"Career year {horizon} is {subject.start_year + horizon - 1}, which "
@@ -464,11 +475,17 @@ def build_report(
 ) -> tuple[Path, MemberMetrics, int]:
     """Measure the subject, place them, and write the report."""
     results = Path(results_dir) if results_dir is not None else config.output.dir
-    career_year = config.subject.career_year(this_year)
-    horizon = comparison_horizon(career_year, config.cohort.horizon_years)
-    # The last year of the window is the calendar year we are standing in, so
-    # the subject has had part of a year where the cohort had all of it.
-    final_year_incomplete = config.subject.start_year + horizon - 1 >= this_year
+    subject_spec = config.subject
+    career_year = subject_spec.career_year(this_year)
+    extension = subject_spec.clock_extension_years
+    clock_year = max(1, career_year - extension)
+    horizon = comparison_horizon(clock_year, config.cohort.horizon_years)
+
+    # A stopped clock grants calendar time, it does not remove the work done in
+    # that time. So the subject is compared at their clock year while their
+    # papers are counted across the calendar years they actually had.
+    subject_window = horizon + extension
+    final_year_incomplete = subject_spec.start_year + subject_window - 1 >= this_year
 
     works = subject_works(client, config, this_year)
     if on_progress:
@@ -481,7 +498,7 @@ def build_report(
         works,
         list(config.subject.openalex_author_ids),
         config.subject.start_year,
-        horizon,
+        subject_window,
         config.cohort.article_types,
         benchmarks.impacts,
         benchmarks.cutoff,
@@ -505,6 +522,7 @@ def build_report(
         config=config,
         horizon=horizon,
         career_year=career_year,
+        extension=extension,
         final_year_incomplete=final_year_incomplete,
         placements=placements,
         rows=benchmarks.rows,

@@ -191,6 +191,7 @@ def written_report(tmp_path, config_dict, **overrides):
         horizon=6,
         career_year=11,
         final_year_incomplete=False,
+        extension=0,
         placements=place_subject(metrics, rows, 6),
         rows=rows,
         venues=[("Chemistry of Materials", 400, 9.1, True)],
@@ -223,7 +224,7 @@ def test_the_report_says_why_citations_carry_no_position(tmp_path, config_dict):
 
 def test_the_report_explains_a_capped_comparison(tmp_path, config_dict):
     text = written_report(tmp_path, config_dict).read_text(encoding="utf-8")
-    assert "career year 11" in text
+    assert "calendar year 11 of the appointment" in text
     assert "credit the extra years" in text
 
 
@@ -325,3 +326,57 @@ def test_a_window_still_running_is_flagged(tmp_path, config_dict):
 def test_a_finished_window_is_not_flagged(tmp_path, config_dict):
     text = written_report(tmp_path, config_dict).read_text(encoding="utf-8")
     assert "still running" not in text
+
+
+# ------------------------------------------------------- a stopped clock
+
+
+def test_a_stopped_clock_moves_the_comparison_year_back(config_dict):
+    """Reading someone at their calendar year would compare them against people
+    who had uninterrupted time, which is what an extension exists to prevent."""
+    import datetime as _dt
+
+    config_dict["subject"]["start_year"] = 2021
+    config_dict["subject"]["clock_extension_years"] = 1
+    config = build_config(config_dict)
+    today = _dt.date(2026, 8, 28)
+
+    assert config.subject.current_career_year(today) == 6
+    assert config.subject.clock_year(today) == 5
+    assert comparison_horizon(config.subject.clock_year(today), 6) == 5
+
+
+def test_no_extension_leaves_the_clock_where_it_was(config_dict):
+    import datetime as _dt
+
+    config_dict["subject"]["start_year"] = 2021
+    config = build_config(config_dict)
+    today = _dt.date(2026, 8, 28)
+    assert config.subject.clock_year(today) == config.subject.current_career_year(today)
+
+
+def test_a_clock_year_never_drops_below_one(config_dict):
+    import datetime as _dt
+
+    config_dict["subject"]["start_year"] = 2026
+    config_dict["subject"]["clock_extension_years"] = 3
+    subject = build_config(config_dict).subject
+    assert subject.clock_year(_dt.date(2026, 8, 28)) == 1
+
+
+def test_the_report_explains_the_stopped_clock(tmp_path, config_dict):
+    config_dict["subject"]["start_year"] = 2021
+    config_dict["subject"]["clock_extension_years"] = 1
+    text = written_report(
+        tmp_path, config_dict, horizon=5, career_year=6, extension=1
+    ).read_text(encoding="utf-8")
+    assert "clock was stopped for 1 year" in text
+    assert "year 5 of the tenure clock" in text
+    assert "2021 to 2026" in text
+    assert "grants time rather than removing the work" in text
+
+
+def test_a_report_with_no_extension_says_nothing_about_one(tmp_path, config_dict):
+    assert "clock was stopped" not in written_report(
+        tmp_path, config_dict
+    ).read_text(encoding="utf-8")

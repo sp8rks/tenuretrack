@@ -50,6 +50,7 @@ _SUBJECT_KEYS = {
     "institution_ror",
     "institution_name",
     "start_year",
+    "clock_extension_years",
     "clock_notes",
 }
 _SUBFIELD_KEYS = {"label", "topics", "excluded_topics"}
@@ -98,15 +99,31 @@ class Subject:
     start_year: int
     orcid: str | None = None
     openalex_author_ids: tuple[str, ...] = ()
+    clock_extension_years: int = 0
+    """Years the tenure clock was stopped, for parental or medical leave, or
+    for a pandemic extension.
+
+    An extension does not remove the work done during it. It grants extra
+    calendar time to reach the same point on the clock, so somebody two years
+    into an extended clock is compared against a cohort at year two while their
+    papers are counted across all three calendar years they have had. Reading
+    them at their calendar year instead would compare them against people who
+    had uninterrupted time, which is what the extension exists to prevent.
+    """
     clock_notes: str = ""
 
     def career_year(self, publication_year: int) -> int:
-        """Career year of a paper. Year 1 is the year the appointment began."""
+        """Calendar career year of a paper. Year 1 is the appointment year."""
         return publication_year - self.start_year + 1
 
     def current_career_year(self, today: _dt.date | None = None) -> int:
+        """Calendar years elapsed since the appointment began, counting this one."""
         today = today or _dt.date.today()
         return self.career_year(today.year)
+
+    def clock_year(self, today: _dt.date | None = None) -> int:
+        """Position on the tenure clock, with any stopped years taken out."""
+        return max(1, self.current_career_year(today) - self.clock_extension_years)
 
 
 @dataclass(frozen=True)
@@ -310,6 +327,17 @@ def _subject(raw: dict, problems: list[str]) -> Subject:
     else:
         start_year = year_raw
 
+    extension = 0
+    ext_raw = raw.get("clock_extension_years", 0)
+    if isinstance(ext_raw, bool) or not isinstance(ext_raw, int):
+        problems.append("subject.clock_extension_years must be a whole number of years")
+    elif not 0 <= ext_raw <= 10:
+        problems.append(
+            f"subject.clock_extension_years {ext_raw} is outside 0 to 10"
+        )
+    else:
+        extension = ext_raw
+
     notes = raw.get("clock_notes") or ""
     if not isinstance(notes, str):
         problems.append("subject.clock_notes must be a string")
@@ -322,6 +350,7 @@ def _subject(raw: dict, problems: list[str]) -> Subject:
         start_year=start_year,
         orcid=orcid,
         openalex_author_ids=tuple(author_ids),
+        clock_extension_years=extension,
         clock_notes=notes,
     )
 

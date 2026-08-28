@@ -8,6 +8,9 @@ subject:
   institution_ror: "https://ror.org/000000000"
   institution_name: "University of X"
   start_year: 2021                      # first year of the tenure-line appointment
+  clock_extension_years: 0              # years the clock was stopped (parental or medical
+                                        # leave, pandemic extension). Moves the comparison
+                                        # back that many years and keeps all the papers.
   clock_notes: ""                       # e.g. "converted from lecturer line in 2020"
 
 subfield:

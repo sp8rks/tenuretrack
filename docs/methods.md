@@ -16,6 +16,14 @@ All data is from OpenAlex (CC0). Author records give affiliations by year and to
 
 The subject supplies an ORCID, an institution (a name or a ROR), and the first calendar year of the tenure-line appointment. Career year is `publication_year - start_year + 1`.
 
+### Stopped clocks
+
+`subject.clock_extension_years` records years the tenure clock was stopped, for parental or medical leave or a pandemic extension. It defaults to zero.
+
+An extension grants calendar time; it does not remove the work done during that time. So a subject with a one-year extension who is in their sixth calendar year is at clock year five, is compared against the cohort at year five, and has their papers counted across all six calendar years they have had. Reading them at their calendar year instead would compare them against people who had uninterrupted time, which is the thing the extension exists to prevent.
+
+This makes the subject's window one calendar year longer than the cohort's at the same clock year, and the report says so in as many words rather than leaving the asymmetry implicit. Nothing is prorated or adjusted: the arrangement is what the institution granted, and the report's job is to state it.
+
 The start year anchors every career year in the report, so a wrong one moves every number without any visible symptom. `init` therefore checks it against the earliest paper carrying the institution's byline and says so when the two are more than a year apart in either direction. Papers lag appointments, so a first byline one year after the start is normal; five years is a typo or a misremembered year. This check was added after a supplied start year two years late went unnoticed through an entire run and shifted every reported figure.
 
 ### 3.1 Identity
