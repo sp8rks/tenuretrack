@@ -1,0 +1,19 @@
+# Never commit anything that can contain cohort member names
+.cache/
+data/
+*.jsonl
+*.jsonl.gz
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+dist/
+build/
+*.egg-info/
+.pytest_cache/
+
+# Editors
+.vscode/
+.idea/
+.DS_Store

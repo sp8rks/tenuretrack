@@ -1,0 +1,36 @@
+# tenuretrack subject spec. Copy to benchmark.yaml and edit.
+# `tenuretrack init --orcid ... --institution ... --start ...` writes a first draft of this file.
+
+subject:
+  name: "Jane Doe"                      # appears in the subject's own report only
+  orcid: "0000-0000-0000-0000"
+  openalex_author_ids: []               # filled by init; extra IDs if the profile is split
+  institution_ror: "https://ror.org/00000000"
+  institution_name: "University of X"
+  start_year: 2021                      # first year of the tenure-line appointment
+  clock_notes: ""                       # e.g. "converted from lecturer line in 2020"
+
+subfield:
+  label: "solid-state battery materials" # plain words for slides
+  topics:                               # 4 to 6 OpenAlex topic IDs; init proposes these from your papers
+    - id: T00000
+      name: "Example topic A"
+    - id: T00001
+      name: "Example topic B"
+  excluded_topics: []                   # topics deliberately left out, with a reason in a comment
+
+cohort:
+  start_window: [2008, 2018]            # cohort members' estimated start years
+  horizon_years: 6                      # the destination benchmark
+  countries: ["US"]
+  institution_types: ["education"]
+  core_topic_share_min: 0.25
+  min_led_papers: 3
+  min_cell_size: 5
+  bootstrap_iterations: 2000
+  article_types: ["article"]           # applied symmetrically to subject and cohort
+
+output:
+  dir: results
+  slides: true
+  chaperone: true

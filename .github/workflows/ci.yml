@@ -1,0 +1,15 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -e ".[dev]"
+      - run: make test
+      # Guardrail: no author IDs or ORCIDs in anything committed under examples/
+      - run: |
+          ! grep -rEn '\bA[0-9]{7,}\b|[0-9]{4}-[0-9]{4}-[0-9]{4}-[0-9]{3}[0-9X]' examples/*/results/ || (echo "identifying data in results" && exit 1)
