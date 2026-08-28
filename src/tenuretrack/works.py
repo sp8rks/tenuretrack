@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable, Iterator, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from tenuretrack.openalex import OpenAlexClient
 
@@ -32,9 +32,13 @@ __all__ = [
     "has_byline_at",
     "institutions_on",
     "is_journal_article",
+    "only_bylines_of",
     "parse_work",
+    "work_from_row",
+    "work_to_row",
     "role_of",
     "short_author_id",
+    "short_source_id",
     "short_topic_id",
 ]
 
@@ -107,6 +111,65 @@ class Work:
         return f"{normalize_title(self.title)}|{self.year}"
 
 
+def work_to_row(work: Work) -> dict:
+    """The on-disk shape, explicit so the file survives a refactor."""
+    return {
+        "id": work.id,
+        "y": work.year,
+        "doi": work.doi,
+        "t": work.title,
+        "ty": work.type,
+        "s": work.source_id,
+        "sn": work.source_name,
+        "st": work.source_type,
+        "tp": work.topic_id,
+        "tn": work.topic_name,
+        "tf": work.topic_subfield,
+        "c": work.cited_by_count,
+        "b": [
+            [b.author_id, b.position, int(b.is_corresponding), list(b.institution_rors)]
+            for b in work.bylines
+        ],
+    }
+
+
+def work_from_row(row) -> Work:
+    return Work(
+        id=str(row.get("id") or ""),
+        year=int(row.get("y") or 0),
+        doi=str(row.get("doi") or ""),
+        title=str(row.get("t") or ""),
+        type=str(row.get("ty") or ""),
+        source_id=str(row.get("s") or ""),
+        source_name=str(row.get("sn") or ""),
+        source_type=str(row.get("st") or ""),
+        topic_id=str(row.get("tp") or ""),
+        topic_name=str(row.get("tn") or ""),
+        topic_subfield=str(row.get("tf") or ""),
+        cited_by_count=int(row.get("c") or 0),
+        bylines=tuple(
+            Byline(
+                author_id=str(b[0]),
+                position=str(b[1]),
+                is_corresponding=bool(b[2]),
+                institution_rors=tuple(str(r) for r in b[3]),
+            )
+            for b in row.get("b") or []
+        ),
+    )
+
+
+def only_bylines_of(work: Work, author_ids: Iterable[str]) -> Work:
+    """The same paper with every other author's line dropped.
+
+    A materials paper can carry fifty authorships and we only ever read this
+    person's: their position, their corresponding flag, their institutions.
+    Keeping the rest would multiply the stored record by an order of magnitude
+    for data no stage looks at.
+    """
+    return replace(work, bylines=bylines_of(work, author_ids))
+
+
 # -------------------------------------------------------------------- parsing
 
 
@@ -144,7 +207,7 @@ def parse_work(raw) -> Work:
         doi=normalize_doi(raw.get("doi")),
         title=str(raw.get("title") or ""),
         type=str(raw.get("type") or ""),
-        source_id=str(source.get("id") or ""),
+        source_id=short_source_id(source.get("id")),
         source_name=str(source.get("display_name") or ""),
         source_type=str(source.get("type") or ""),
         topic_id=short_topic_id(topic.get("id")),
@@ -174,6 +237,12 @@ def short_author_id(value: object) -> str:
 def short_topic_id(value: object) -> str:
     text = str(value or "").strip().rstrip("/").rsplit("/", 1)[-1].upper()
     return text if re.fullmatch(r"T\d+", text) else ""
+
+
+def short_source_id(value: object) -> str:
+    """`https://openalex.org/S12345` to `S12345`, the form filters take."""
+    text = str(value or "").strip().rstrip("/").rsplit("/", 1)[-1].upper()
+    return text if re.fullmatch(r"S\d+", text) else ""
 
 
 def short_ror(value: object) -> str:

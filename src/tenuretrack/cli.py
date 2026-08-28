@@ -13,8 +13,9 @@ import typer
 import yaml
 
 from tenuretrack import __version__
-from tenuretrack.career import build_starts
+from tenuretrack.career import build_starts, candidates_worth_asking
 from tenuretrack.config import Config, ConfigError, load_config
+from tenuretrack.metrics import build_benchmarks
 from tenuretrack.openalex import (
     DEFAULT_CACHE_DIR,
     MailtoNotConfigured,
@@ -232,6 +233,20 @@ def run(
                 on_progress=typer.echo,
                 refresh=refresh,
             )
+            asked = [
+                c.author_id
+                for c in candidates_worth_asking(
+                    result.kept, config.cohort.start_window
+                )
+            ]
+            benchmarks = build_benchmarks(
+                client,
+                members,
+                asked,
+                config,
+                data_dir=data_dir,
+                on_progress=typer.echo,
+            )
         except QuotaExhausted as exc:
             # Everything fetched is cached and the funnel so far is on disk, so
             # the rerun picks up here rather than starting over.
@@ -250,7 +265,11 @@ def run(
     _echo_funnel(result.funnel)
     typer.echo(f"OpenAlex requests: {requests} (served from cache: {hits}){budget}")
     typer.echo(f"{len(members)} people placed on the tenure clock.")
-    _not_implemented("the metrics and the report", "tasks 5 and 6")
+    typer.echo(
+        f"Wrote {benchmarks.csv_path.name} and {benchmarks.md_path.name} "
+        f"({benchmarks.institutions} institutions in the cohort)."
+    )
+    _not_implemented("the subject comparison and the report", "task 6")
 
 
 def _echo_funnel(funnel) -> None:

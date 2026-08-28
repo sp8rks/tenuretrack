@@ -36,7 +36,10 @@ from tenuretrack.works import (
     fetch_works_by_author,
     institutions_on,
     is_journal_article,
+    only_bylines_of,
     role_of,
+    work_from_row,
+    work_to_row,
 )
 
 __all__ = [
@@ -47,14 +50,31 @@ __all__ = [
     "NO_RULE",
     "StartEstimate",
     "build_starts",
+    "candidates_worth_asking",
     "estimate_start",
     "estimate_starts",
     "load_starts",
+    "load_works",
     "plausible_years",
     "screen_starts",
 ]
 
 STARTS_FILENAME = "starts.jsonl.gz"
+
+WORKS_FILENAME = "works.jsonl.gz"
+"""Everyone's papers, kept so later stages never refetch them.
+
+The request cache alone is not enough. Works are fetched fifty authors at a
+time and a cached page is keyed by the exact set of IDs in its batch, so adding
+or removing one candidate shifts every batch after them and invalidates the
+lot. Measured: excluding the subject from his own pool turned what should have
+been a free replay into 1,236 requests. Writing the papers out by author
+decouples the later stages from how the fetch happened to be grouped.
+
+Only the person's own byline is kept on each paper. A materials paper can carry
+fifty authorships and no stage reads anyone else's. Holds author IDs, so it
+lives under `data/`.
+"""
 
 AFFILIATION_LED = "affiliation_led"
 FIRST_LED_MINUS_ONE = "first_led_minus_one"
@@ -289,10 +309,14 @@ def estimate_starts(
 
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = dest.with_suffix(dest.suffix + ".tmp")
+    works_dest = dest.parent / WORKS_FILENAME
+    works_tmp = works_dest.with_suffix(works_dest.suffix + ".tmp")
     estimates: dict[str, StartEstimate] = {}
     done = 0
 
-    with gzip.open(tmp, "wt", encoding="utf-8") as handle:
+    with gzip.open(tmp, "wt", encoding="utf-8") as handle, gzip.open(
+        works_tmp, "wt", encoding="utf-8"
+    ) as works_handle:
         for author_id, works in fetch_works_by_author(
             client, author_ids, first_year, last_year
         ):
@@ -303,6 +327,18 @@ def estimate_starts(
             handle.write(
                 json.dumps(estimate.to_row(), separators=(",", ":")) + "\n"
             )
+            works_handle.write(
+                json.dumps(
+                    {
+                        "author_id": author_id,
+                        "works": [
+                            work_to_row(only_bylines_of(w, [author_id])) for w in works
+                        ],
+                    },
+                    separators=(",", ":"),
+                )
+                + "\n"
+            )
             done += 1
             if on_progress and done % (PROGRESS_BLOCK * 50) == 0:
                 on_progress(
@@ -311,12 +347,31 @@ def estimate_starts(
                 )
 
     os.replace(tmp, dest)
+    os.replace(works_tmp, works_dest)
     if on_progress:
         on_progress(
             f"Career starts estimated for {done} people "
             f"({client.request_count} requests)."
         )
     return estimates
+
+
+def load_works(
+    path: str | Path, wanted: Iterable[str] | None = None
+) -> dict[str, list[Work]]:
+    """Read the papers back, optionally only for the people still of interest."""
+    keep = None if wanted is None else {a.upper() for a in wanted}
+    out: dict[str, list[Work]] = {}
+    with gzip.open(Path(path), "rt", encoding="utf-8") as handle:
+        for line in handle:
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            author_id = str(row.get("author_id") or "")
+            if keep is not None and author_id.upper() not in keep:
+                continue
+            out[author_id] = [work_from_row(w) for w in row.get("works") or []]
+    return out
 
 
 def load_starts(path: str | Path) -> dict[str, StartEstimate]:
@@ -365,6 +420,19 @@ def screen_starts(
     return kept
 
 
+def candidates_worth_asking(
+    candidates: Sequence[Candidate], start_window: tuple[int, int]
+) -> list[Candidate]:
+    """The people whose works are worth fetching, in a stable order.
+
+    Later stages replay the same batched works queries out of the cache, and a
+    batch is keyed by the exact set of author IDs in it. Recomputing this list
+    the same way is what makes those replays free rather than a second full
+    download.
+    """
+    return [c for c in candidates if plausible_years(c, start_window)]
+
+
 def build_starts(
     client: OpenAlexClient,
     candidates: Sequence[Candidate],
@@ -377,7 +445,7 @@ def build_starts(
 ) -> list[tuple[Candidate, StartEstimate]]:
     """Pre-filter, estimate, and screen. The whole of task 4."""
     window = config.cohort.start_window
-    worth_asking = [c for c in candidates if plausible_years(c, window)]
+    worth_asking = candidates_worth_asking(candidates, window)
     funnel.record(
         "plausible years",
         f"byline years could contain a start between {window[0]} and {window[1]}",

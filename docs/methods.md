@@ -94,18 +94,40 @@ The cohort window (2008 to 2018) guarantees every member has completed at least 
 
 ## 6. Metrics
 
-Computed per person through year N, for N = 1..6 and for the subject's current career year:
+Computed per person through career year N, for N = 1..6 and for the subject's current career year. Career year 1 is the calendar year the appointment began, so the window through year N runs from `start_year` to `start_year + N - 1` inclusive.
 
-- Publications (journal articles).
-- Led publications: last author, or corresponding author when flagged. Lead share = led / publications.
-- Citations: sum of current `cited_by_count` for window papers.
-- h-index over window papers.
-- Median venue impact over window papers with a resolvable source.
-- Top-quartile venue share: fraction of window papers whose venue impact is at or above the 75th percentile of venue impacts across all headline-cohort window papers.
+- **Publications.** Journal articles only: OpenAlex `type == "article"`, not on a preprint server. Applied identically to the subject and to every cohort member, because a comparison where one side counts preprints is not a comparison.
+- **Led publications.** Last author, or corresponding author where the flag is set. Corresponding flags are missing for many journal-years, so last position is the robust signal and the flag is a bonus. Lead share is led divided by publications.
+- **Citations.** Sum of `cited_by_count` over window papers, as they stand today.
+- **h-index** over window papers only, not the person's whole record.
+- **Median venue impact** over window papers whose venue has a `2yr_mean_citedness` figure.
+- **Top-quartile venue share**: the fraction of venue-resolvable window papers at or above the cutoff in 6.2.
+
+Cohort members count every byline. Their start estimate already anchored them to an institution, and filtering again on that institution would drop the papers they wrote after moving. The subject is anchored to `institution_ror`, because for them the question is what they did in this job.
+
+### 6.1 What stays missing
+
+A venue with no impact figure is left out of the venue calculations rather than counted as zero. Imputing would invent numbers for exactly the venues OpenAlex knows least about, which are disproportionately the smaller and newer journals, and would drag a person's median toward whatever value was chosen.
+
+A share over zero papers is recorded as missing, not as zero. Someone with nothing published in year 1 has no lead share; entering a zero would mix "led none of them" with "had none to lead" and pull the cohort's quartiles down with a value that means "not applicable". Each quartile reports how many people actually had a value.
+
+### 6.2 The top-quartile cutoff
+
+The cutoff is the 75th percentile of venue impact across every headline-window paper the cohort wrote, computed once and then held fixed across all horizons.
+
+Within the cohort, never from a global journal list: a first-quartile journal in one subfield is a fourth-quartile journal in another, and describing this subfield is the whole point.
+
+Fixed across horizons because a cutoff recomputed at each N would move under the comparison. "Top quartile at year 3" and "top quartile at year 6" would then be different questions, and the report puts them in the same table.
 
 ## 7. Quartiles and uncertainty
 
-p25, p50, p75 per metric and horizon, with 95% confidence intervals from a cluster bootstrap that resamples people (2,000 iterations).
+p25, p50 and p75 per metric and horizon, taken across people. Never a mean: a mean publication count is pulled around by the top of the distribution and describes nobody.
+
+95% confidence intervals come from a cluster bootstrap that resamples people, 2,000 iterations by default. People, not papers, because the thing that varies between imaginable cohorts is which people are in them. Resampling papers in a cohort where one prolific member wrote a fifth of them would report that member's habits as the subfield's norm.
+
+Cells covering fewer than `min_cell_size` people (default 5) are withheld from both output files. The count is still published; only the values are suppressed. A quartile over a handful of people can identify them.
+
+Outputs are `results/benchmarks.csv` and `results/benchmarks.md`. Both writers run the aggregates-only guardrail on the finished file before returning.
 
 ## 8. Comparison rules
 

@@ -106,20 +106,34 @@ def patch_pool(monkeypatch, outcome, members=(), tmp_path=None):
         funnel.record("start in window", "estimated start in the window", len(members))
         return list(members)
 
+    def benchmarks_stage(_client, _members, _asked, _config, **_kwargs):
+        from tenuretrack.metrics import BenchmarkResult
+
+        return BenchmarkResult(
+            per_member={}, rows=[], impacts={}, cutoff=None, works_by_member={},
+            institutions=42, csv_path=Path("benchmarks.csv"),
+            md_path=Path("benchmarks.md"),
+        )
+
     monkeypatch.setattr(cli, "build_pool", pool_stage)
     monkeypatch.setattr(cli, "build_starts", career_stage)
+    monkeypatch.setattr(cli, "candidates_worth_asking", lambda cands, _w: list(cands))
+    monkeypatch.setattr(cli, "build_benchmarks", benchmarks_stage)
 
 
 def fake_pool(kept=3, tmp_path=None):
-    from tenuretrack.pool import Funnel, PoolResult
+    from tenuretrack.pool import Candidate, Funnel, PoolResult
 
     funnel = Funnel()
     funnel.record("candidates", "topics", 100)
     funnel.record("university", "education", kept)
     results = Path(tmp_path) / "results" if tmp_path else Path("results")
+    people = tuple(
+        Candidate(author_id=f"A{1000000 + i}", name="") for i in range(kept)
+    )
     return PoolResult(
         pool_size=100,
-        kept=tuple(range(kept)),
+        kept=people,
         funnel=funnel,
         pool_path=Path("data/pool.jsonl.gz"),
         funnel_path=results / "funnel.csv",
@@ -136,6 +150,7 @@ def test_run_builds_the_pool_then_reports_what_is_not_built_yet(
     assert result.exit_code == EXIT_NOT_IMPLEMENTED
     out = text(result)
     assert "4 people placed on the tenure clock" in out
+    assert "42 institutions in the cohort" in out
     assert "Funnel:" in out
     assert "not implemented yet" in out
     assert (tmp_path / "results" / "funnel.csv").exists()

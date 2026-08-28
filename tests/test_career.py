@@ -496,3 +496,76 @@ def test_two_comparable_posts_still_date_from_the_first():
     estimate = estimate_start(record, [ME], ARTICLES)
     assert estimate.institution_ror == JOB
     assert estimate.year == 2010
+
+
+# ------------------------------------------- papers kept for the later stages
+
+
+def test_the_papers_are_written_out_beside_the_starts(tmp_path, config_dict):
+    from tenuretrack.career import WORKS_FILENAME, load_works
+
+    server = WorksServer({ME: [paper(2012, JOB, "middle"), paper(2013, JOB, "last")]})
+    estimate_starts(
+        server.client(tmp_path),
+        [candidate()],
+        build_config(config_dict),
+        tmp_path / "data" / STARTS_FILENAME,
+    )
+    stored = load_works(tmp_path / "data" / WORKS_FILENAME)
+    assert sorted(w.year for w in stored[ME]) == [2012, 2013]
+
+
+def test_only_this_persons_byline_is_kept_on_each_paper(tmp_path, config_dict):
+    """A materials paper can carry fifty authorships and no stage reads the rest."""
+    from tenuretrack.career import WORKS_FILENAME, load_works
+
+    crowded = paper(2013, JOB, "last")
+    crowded["authorships"] += [
+        {
+            "author": {"id": f"https://openalex.org/A200000{i}"},
+            "author_position": "middle",
+            "is_corresponding": False,
+            "institutions": [],
+        }
+        for i in range(9)
+    ]
+    server = WorksServer({ME: [crowded]})
+    estimate_starts(
+        server.client(tmp_path),
+        [candidate()],
+        build_config(config_dict),
+        tmp_path / "data" / STARTS_FILENAME,
+    )
+    stored = load_works(tmp_path / "data" / WORKS_FILENAME)
+    assert [b.author_id for b in stored[ME][0].bylines] == [ME]
+
+
+def test_stored_papers_survive_the_round_trip(tmp_path, config_dict):
+    from tenuretrack.career import WORKS_FILENAME, load_works
+
+    server = WorksServer({ME: [paper(2013, JOB, "last", corresponding=True)]})
+    estimate_starts(
+        server.client(tmp_path),
+        [candidate()],
+        build_config(config_dict),
+        tmp_path / "data" / STARTS_FILENAME,
+    )
+    work = load_works(tmp_path / "data" / WORKS_FILENAME)[ME][0]
+    assert work.bylines[0].position == "last"
+    assert work.bylines[0].is_corresponding
+    assert work.bylines[0].institution_rors == (f"https://ror.org/{JOB}",)
+    assert work.source_name == "Journal"
+
+
+def test_only_the_people_asked_for_are_read_back(tmp_path, config_dict):
+    from tenuretrack.career import WORKS_FILENAME, load_works
+
+    server = WorksServer({ME: [paper(2013, JOB, "last")]})
+    estimate_starts(
+        server.client(tmp_path),
+        [candidate("A1000001"), candidate("A1000002")],
+        build_config(config_dict),
+        tmp_path / "data" / STARTS_FILENAME,
+    )
+    stored = load_works(tmp_path / "data" / WORKS_FILENAME, ["A1000001"])
+    assert set(stored) == {"A1000001"}
