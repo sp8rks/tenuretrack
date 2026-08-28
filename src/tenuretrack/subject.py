@@ -51,6 +51,7 @@ __all__ = [
     "measure_reach",
     "fetch_works",
     "find_split_profiles",
+    "first_byline_year",
     "format_result",
     "has_byline_at",
     "initialize",
@@ -98,6 +99,15 @@ says the record is thin."""
 
 WANTED_TOPICS = 4
 TOP_VENUES_PER_TOPIC = 3
+
+START_YEAR_SLACK = 1
+"""How far the supplied start year may sit from the first institutional byline.
+
+Papers lag appointments, so a first byline one year after the start is normal.
+Further apart than that in either direction usually means a typo or a
+misremembered year, and the start year anchors every career year in the report,
+so a wrong one moves every number silently.
+"""
 
 LOPSIDED_TOPIC_SHARE = 0.4
 """Flag a topic contributing more than this much of the whole set's reach.
@@ -563,7 +573,16 @@ def initialize(
         basis=basis,
         current_career_year=this_year - start_year + 1,
         notes=tuple(
-            _notes(place, alternatives, splits, window, basis, topics, start_year)
+            _notes(
+                place,
+                alternatives,
+                splits,
+                window,
+                basis,
+                topics,
+                start_year,
+                first_byline_year(works, author_ids, place.ror, defaults.article_types),
+            )
         ),
     )
     return InitResult(**{**result.__dict__, "config": draft_config(result)})
@@ -577,6 +596,7 @@ def _notes(
     basis: str,
     topics: Sequence[TopicProposal],
     start_year: int,
+    first_byline: int | None = None,
 ) -> Iterable[str]:
     """Everything the person should read before accepting the proposal."""
     if place.type and place.type != "education":
@@ -616,6 +636,24 @@ def _notes(
             f"The proposal rests on {len(window)} paper(s), which is thin. Read the "
             "topic list closely."
         )
+    if first_byline is not None:
+        drift = first_byline - start_year
+        if drift > START_YEAR_SLACK:
+            yield (
+                f"You gave {start_year} as the year your appointment began, but the "
+                f"first paper carrying the {place.name} byline is from "
+                f"{first_byline}. If the appointment really began in "
+                f"{first_byline - 1} or {first_byline}, fix start_year before "
+                "running: every career year in the report is counted from it."
+            )
+        elif drift < -START_YEAR_SLACK:
+            yield (
+                f"You gave {start_year} as the year your appointment began, and "
+                f"papers carry the {place.name} byline from {first_byline}, "
+                f"{-drift} years earlier. That happens with a visiting or "
+                "adjunct period before the tenure-line appointment. If it is not "
+                "what you meant, fix start_year before running."
+            )
     reaches = [t for t in topics if t.reach is not None]
     if reaches:
         widest = max(reaches, key=lambda t: t.reach or 0)
@@ -656,6 +694,27 @@ def measure_reach(
     except OpenAlexError:
         return tuple(proposals), None
     return tuple(annotated), combined
+
+
+def first_byline_year(
+    works: Sequence[Work],
+    author_ids: Sequence[str],
+    ror: str,
+    article_types: Sequence[str],
+) -> int | None:
+    """The earliest year this person carried that institution's byline.
+
+    The only independent check on the start year the user typed, and the start
+    year anchors every career year in the report.
+    """
+    years = [
+        w.year
+        for w in works
+        if w.year
+        and is_journal_article(w, article_types)
+        and has_byline_at(w, author_ids, ror)
+    ]
+    return min(years) if years else None
 
 
 def draft_config(result: InitResult) -> dict:

@@ -29,6 +29,11 @@ cohort:
   min_cell_size: 5
   bootstrap_iterations: 2000
   article_types: ["article"]           # applied symmetrically to subject and cohort
+  excluded_venues: []                  # venue names or OpenAlex source IDs to leave out.
+                                       # Some conference abstract series carry an ISSN and
+                                       # are typed as journals, so nothing in the data
+                                       # distinguishes them. Applied to subject and cohort
+                                       # alike, or to neither.
 
 output:
   dir: results

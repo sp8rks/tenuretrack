@@ -512,3 +512,34 @@ def test_it_falls_back_to_the_network_if_the_data_dir_was_cleared(tmp_path, conf
         client, ["A1"], ["A1"], config_for(config_dict), data_dir=tmp_path / "gone"
     )
     assert calls, "with no stored papers it has to ask"
+
+
+# ---------------------------------------------------------- excluded venues
+
+
+def test_a_configured_venue_is_dropped_from_the_window():
+    """Some conference abstract series carry an ISSN and are typed as journals,
+    so nothing in the data distinguishes them and a person has to say."""
+    works = [paper(2010, source="S1"), paper(2011, source="S2")]
+    kept = window_papers(works, 2010, 6, ARTICLES, excluded_venues=["S2"])
+    assert [w.source_id for w in kept] == ["S1"]
+
+
+def test_a_venue_can_be_excluded_by_name():
+    works = [paper(2010, source="S1"), paper(2011, source="S2")]
+    kept = window_papers(works, 2010, 6, ARTICLES, excluded_venues=["journal s2"])
+    assert [w.source_id for w in kept] == ["S1"]
+
+
+def test_excluding_nothing_changes_nothing():
+    works = [paper(2010, source="S1"), paper(2011, source="S2")]
+    assert len(window_papers(works, 2010, 6, ARTICLES, excluded_venues=[])) == 2
+
+
+def test_the_exclusion_applies_to_the_subjects_own_metrics_too(config_dict):
+    """Applied to both sides or to neither, or the comparison is not one."""
+    works = [paper(2010, "last", "S1", 5), paper(2011, "last", "S2", 5)]
+    got = member_metrics(
+        works, [ME], 2010, 6, ARTICLES, {}, None, excluded_venues=["S2"]
+    )
+    assert got.pubs == 1

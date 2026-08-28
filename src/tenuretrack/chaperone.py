@@ -153,6 +153,7 @@ def person_roles(
     article_types: Sequence[str],
     impacts: Mapping[str, float],
     cutoff: float | None,
+    excluded_venues: Sequence[str] = (),
 ) -> PersonRoles:
     """Split one person's window papers by role, counting top-quartile venues.
 
@@ -165,7 +166,9 @@ def person_roles(
     if cutoff is None:
         return PersonRoles(author_id=author_id)
 
-    for paper in window_papers(works, start_year, horizon, article_types):
+    for paper in window_papers(
+        works, start_year, horizon, article_types, excluded_venues
+    ):
         impact = impacts.get(paper.source_id)
         if impact is None:
             continue
@@ -334,6 +337,7 @@ def venue_coauthored_share(
             estimate.year,
             config.cohort.horizon_years,
             config.cohort.article_types,
+            config.cohort.excluded_venues,
         ):
             if not paper.source_id:
                 continue
@@ -557,6 +561,7 @@ def build_chaperone(
             config.cohort.article_types,
             benchmarks.impacts,
             benchmarks.cutoff,
+            config.cohort.excluded_venues,
         )
         for author_id, works in benchmarks.works_by_member.items()
         if starts.get(author_id) and starts[author_id].year

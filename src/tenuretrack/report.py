@@ -474,6 +474,7 @@ def build_report(
         config.cohort.article_types,
         benchmarks.impacts,
         benchmarks.cutoff,
+        config.cohort.excluded_venues,
     )
     placements = place_subject(metrics, benchmarks.rows, horizon)
     venues = top_venues(

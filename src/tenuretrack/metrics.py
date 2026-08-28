@@ -176,6 +176,7 @@ def window_papers(
     start_year: int,
     horizon: int,
     article_types: Sequence[str],
+    excluded_venues: Sequence[str] = (),
 ) -> list[Work]:
     """Journal articles in career years 1 through `horizon`.
 
@@ -186,7 +187,8 @@ def window_papers(
     return [
         w
         for w in works
-        if start_year <= w.year <= last and is_journal_article(w, article_types)
+        if start_year <= w.year <= last
+        and is_journal_article(w, article_types, excluded_venues)
     ]
 
 
@@ -198,6 +200,7 @@ def member_metrics(
     article_types: Sequence[str],
     impacts: Mapping[str, float],
     cutoff: float | None,
+    excluded_venues: Sequence[str] = (),
 ) -> MemberMetrics:
     """Everything measured about one person through career year `horizon`.
 
@@ -210,7 +213,9 @@ def member_metrics(
     yet has no lead share, and averaging a zero in would drag the cohort down
     with a number that means "not applicable".
     """
-    papers = window_papers(works, start_year, horizon, article_types)
+    papers = window_papers(
+        works, start_year, horizon, article_types, excluded_venues
+    )
     author_id = author_ids[0] if author_ids else ""
     if not papers:
         return MemberMetrics(author_id=author_id, horizon=horizon)
@@ -553,6 +558,7 @@ def build_metrics(
     the window papers the cutoff and the venue list are both built from."""
     horizons = tuple(horizons or config.cohort.horizons)
     article_types = config.cohort.article_types
+    excluded = config.cohort.excluded_venues
     headline = max(horizons)
 
     headline_papers = [
@@ -560,7 +566,7 @@ def build_metrics(
         for author_id, works in works_by_member.items()
         if starts.get(author_id) and starts[author_id].year
         for paper in window_papers(
-            works, starts[author_id].year or 0, headline, article_types
+            works, starts[author_id].year or 0, headline, article_types, excluded
         )
     ]
     cutoff = top_quartile_cutoff(headline_papers, impacts)
@@ -581,6 +587,7 @@ def build_metrics(
                     article_types,
                     impacts,
                     cutoff,
+                    excluded,
                 )
             )
         per_member[horizon] = rows

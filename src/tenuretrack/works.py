@@ -31,6 +31,7 @@ __all__ = [
     "bylines_of",
     "has_byline_at",
     "institutions_on",
+    "is_excluded_venue",
     "is_journal_article",
     "only_bylines_of",
     "parse_work",
@@ -252,15 +253,34 @@ def short_ror(value: object) -> str:
 # ------------------------------------------------------------------ filtering
 
 
-def is_journal_article(work: Work, article_types: Sequence[str]) -> bool:
+def is_excluded_venue(work: Work, excluded: Iterable[str]) -> bool:
+    """Is this paper in a venue the config asks to leave out?
+
+    Matched on OpenAlex source ID or on the exact display name, case-insensitive,
+    so a config can name a venue the way a person would read it.
+    """
+    wanted = {e.strip().lower() for e in excluded if e and e.strip()}
+    if not wanted:
+        return False
+    return (
+        work.source_id.lower() in wanted or work.source_name.strip().lower() in wanted
+    )
+
+
+def is_journal_article(
+    work: Work, article_types: Sequence[str], excluded_venues: Iterable[str] = ()
+) -> bool:
     """A journal article, not a preprint, editorial, chapter, or erratum.
 
     The same rule runs on the subject and on every cohort member, because a
-    comparison where one side counts preprints is not a comparison.
+    comparison where one side counts preprints is not a comparison. The same is
+    true of `excluded_venues`: it is applied to both sides or to neither.
     """
     if work.type not in set(article_types):
         return False
-    return work.source_type not in PREPRINT_SOURCE_TYPES
+    if work.source_type in PREPRINT_SOURCE_TYPES:
+        return False
+    return not is_excluded_venue(work, excluded_venues)
 
 
 def has_byline_at(work: Work, author_ids: Iterable[str], ror: str) -> bool:

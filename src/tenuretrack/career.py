@@ -157,6 +157,7 @@ def estimate_start(
     works: Sequence[Work],
     author_ids: Sequence[str],
     article_types: Sequence[str],
+    excluded_venues: Sequence[str] = (),
 ) -> StartEstimate:
     """Estimate the first independent start from one person's papers.
 
@@ -174,7 +175,11 @@ def estimate_start(
     were placed weakly rather than not at all.
     """
     author_id = author_ids[0] if author_ids else ""
-    articles = [w for w in works if is_journal_article(w, article_types) and w.year]
+    articles = [
+        w
+        for w in works
+        if is_journal_article(w, article_types, excluded_venues) and w.year
+    ]
     if not articles:
         return StartEstimate(author_id, note="no journal articles on record")
 
@@ -321,7 +326,10 @@ def estimate_starts(
             client, author_ids, first_year, last_year
         ):
             estimate = estimate_start(
-                works, [author_id], config.cohort.article_types
+                works,
+                [author_id],
+                config.cohort.article_types,
+                config.cohort.excluded_venues,
             )
             estimates[author_id] = estimate
             handle.write(

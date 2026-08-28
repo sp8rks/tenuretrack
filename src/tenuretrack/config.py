@@ -59,6 +59,7 @@ _COHORT_KEYS = {
     "countries",
     "institution_types",
     "core_topic_share_min",
+    "excluded_venues",
     "min_led_papers",
     "min_cell_size",
     "bootstrap_iterations",
@@ -134,6 +135,16 @@ class CohortSpec:
     min_cell_size: int = 5
     bootstrap_iterations: int = 2000
     article_types: tuple[str, ...] = ("article",)
+    excluded_venues: tuple[str, ...] = ()
+    """Venues to leave out, by OpenAlex source ID or exact display name.
+
+    Empty by default, because dropping a venue is a judgement about a field and
+    not a rule the tool can derive. It exists because some conference abstract
+    series carry an ISSN and are typed as journals by OpenAlex, so nothing in
+    the data distinguishes them: `Bulletin of the American Physical Society`
+    supplied 932 of one cohort's 122,111 window papers. Applied identically to
+    the subject and to every cohort member.
+    """
 
     @property
     def horizons(self) -> tuple[int, ...]:
@@ -433,6 +444,20 @@ def _cohort(raw: dict, problems: list[str]) -> CohortSpec:
     article_types = _str_list(
         raw, "article_types", defaults.article_types, "cohort", problems
     )
+    excluded_venues: list[str] = []
+    raw_excluded = raw.get("excluded_venues", [])
+    if raw_excluded in (None, []):
+        excluded_venues = []
+    elif not isinstance(raw_excluded, list):
+        problems.append("cohort.excluded_venues must be a list of venue names or IDs")
+    else:
+        for item in raw_excluded:
+            if isinstance(item, str) and item.strip():
+                excluded_venues.append(item.strip())
+            else:
+                problems.append(
+                    "cohort.excluded_venues entries must be non-empty strings"
+                )
 
     share = raw.get("core_topic_share_min", defaults.core_topic_share_min)
     core_share = defaults.core_topic_share_min
@@ -482,6 +507,7 @@ def _cohort(raw: dict, problems: list[str]) -> CohortSpec:
         min_cell_size=min_cell,
         bootstrap_iterations=iterations,
         article_types=tuple(article_types),
+        excluded_venues=tuple(excluded_venues),
     )
 
 

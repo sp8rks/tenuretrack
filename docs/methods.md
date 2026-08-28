@@ -16,6 +16,8 @@ All data is from OpenAlex (CC0). Author records give affiliations by year and to
 
 The subject supplies an ORCID, an institution (a name or a ROR), and the first calendar year of the tenure-line appointment. Career year is `publication_year - start_year + 1`.
 
+The start year anchors every career year in the report, so a wrong one moves every number without any visible symptom. `init` therefore checks it against the earliest paper carrying the institution's byline and says so when the two are more than a year apart in either direction. Papers lag appointments, so a first byline one year after the start is normal; five years is a typo or a misremembered year. This check was added after a supplied start year two years late went unnoticed through an entire run and shifted every reported figure.
+
 ### 3.1 Identity
 
 The ORCID resolves to one OpenAlex author record. OpenAlex sometimes splits one person across several author IDs, so `init` also searches for author profiles at the same institution whose name matches, and merges a candidate only when every one of these holds:
@@ -158,6 +160,6 @@ Measured on one subfield cohort of 1,091: pooled top-quartile rate 25.4% on led 
 - Name disambiguation in OpenAlex is imperfect; the conservative identity filter biases the cohort toward distinctive names.
 - Corresponding-author flags are missing for many journal-years; last-author position is the robust signal.
 - Venue impact is journal-level and field-dependent; the within-cohort quartile comparison partly corrects for this, but a topic set that spans two citation cultures will show it.
-- Some conference abstract series carry an ISSN and are typed as `journal` by OpenAlex, with `is_core` sometimes set, so no field distinguishes them from a real journal. Their entries are typed `article` and are therefore counted as publications on both sides of every comparison. Measured: `Bulletin of the American Physical Society` supplied 932 of one cohort's 122,111 window papers and sat at the top of the venue table with an impact of 0.00. The venue table is printed in full partly so a reader can see this, and a venue near the top with an impact near zero is usually an abstract series.
+- Some conference abstract series carry an ISSN and are typed as `journal` by OpenAlex, and `cohort.excluded_venues` exists so a user can drop them by name or source ID. It is empty by default, because which venues to drop is a judgement about a field rather than a rule the tool can derive, and it applies to the subject and the cohort alike or to neither. with `is_core` sometimes set, so no field distinguishes them from a real journal. Their entries are typed `article` and are therefore counted as publications on both sides of every comparison. Measured: `Bulletin of the American Physical Society` supplied 932 of one cohort's 122,111 window papers and sat at the top of the venue table with an impact of 0.00. The venue table is printed in full partly so a reader can see this, and a venue near the top with an impact near zero is usually an abstract series.
 - Career start is estimated from bylines for cohort members. Lecturer-to-tenure-line conversions, clinical appointments, and delayed starts are invisible.
 - Conference papers, book chapters, software, datasets, patents, teaching, and outreach are outside the data. See `beyond-papers.md`.

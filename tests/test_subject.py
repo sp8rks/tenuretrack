@@ -812,3 +812,62 @@ def test_a_topic_that_dwarfs_the_others_is_called_out(tmp_path):
     joined = " ".join(notes)
     assert "40,000" in joined
     assert "neighboring community" in joined
+
+
+# --------------------------------------------------- checking the start year
+
+
+def test_the_first_institutional_byline_is_found():
+    from tenuretrack.subject import first_byline_year
+
+    works = [
+        parsed(ident="Wa", doi="10.1/a", year=2016),
+        parsed(ident="Wb", doi="10.1/b", year=2014),
+        parsed(
+            ident="Wc",
+            doi="10.1/c",
+            year=2010,
+            authors=((("A100", "first", False), ("https://ror.org/00000000a",)),),
+        ),
+    ]
+    assert first_byline_year(works, ["A100"], ROR, ["article"]) == 2014
+
+
+def test_no_institutional_byline_gives_no_year():
+    from tenuretrack.subject import first_byline_year
+
+    assert first_byline_year([], ["A100"], ROR, ["article"]) is None
+
+
+def note_for(start_year, first_byline):
+    return " ".join(
+        _notes(
+            Institution(ror=ROR, name="University of X"),
+            (), (), [], "anchored",
+            (TopicProposal(id="T10001", name="A", papers=9),),
+            start_year,
+            first_byline=first_byline,
+        )
+    )
+
+
+def test_a_start_year_well_before_the_first_byline_is_flagged():
+    """Says 2013, but nothing carries the byline until 2018."""
+    joined = note_for(2013, 2018)
+    assert "2013" in joined and "2018" in joined
+    assert "fix start_year before running" in joined
+
+
+def test_a_start_year_after_the_first_byline_is_flagged():
+    """The exact error made while building this: 2016 supplied, first byline
+    2014, every career year in the report shifted by two."""
+    joined = note_for(2016, 2014)
+    assert "2016" in joined and "2014" in joined
+    assert "2 years earlier" in joined
+    assert "fix start_year" in joined
+
+
+def test_a_one_year_lag_is_normal_and_not_flagged():
+    """Papers lag appointments, so a first byline a year later means nothing."""
+    assert "start_year" not in note_for(2013, 2014)
+    assert "start_year" not in note_for(2013, 2013)
