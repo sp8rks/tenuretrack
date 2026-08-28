@@ -70,7 +70,7 @@ thousands, and a stage with no output looks hung."""
 # ---------------------------------------------------------------- data shapes
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Affiliation:
     ror: str
     name: str = ""
@@ -79,14 +79,14 @@ class Affiliation:
     years: tuple[int, ...] = ()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class TopicShare:
     id: str
     count: int = 0
     share: float | None = None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Candidate:
     """One person in the pool.
 
@@ -446,36 +446,43 @@ def screen_pool(
     cohort = config.cohort
     topic_ids = config.subfield.topic_ids
 
-    # The API filter already asked for the country, so this normally removes
-    # nobody. It runs anyway because a cached pool can predate a config change.
-    in_country = [c for c in candidates if in_countries(c, cohort.countries)]
+    in_country = on_topic = 0
+    kept: list[Candidate] = []
+
+    # One streaming pass. A pool runs to tens of thousands of people, and
+    # filtering it in stages would hold every one of them in memory to build a
+    # list that the next stage immediately throws most of away.
+    for person in candidates:
+        # The API filter already asked for the country, so this normally
+        # removes nobody. It runs anyway because a pool gathered under one
+        # config can be re-screened under another without refetching.
+        if not in_countries(person, cohort.countries):
+            continue
+        in_country += 1
+        if core_topic_share(person, topic_ids) < cohort.core_topic_share_min:
+            continue
+        on_topic += 1
+        if not has_university_affiliation(person, cohort.institution_types):
+            continue
+        kept.append(person)
+
     funnel.record(
         "candidates",
         f"topics {'|'.join(topic_ids)}, at least {MIN_WORKS} works, "
         f"an affiliation in {'|'.join(cohort.countries)}",
-        len(in_country),
+        in_country,
     )
-
-    on_topic = [
-        c
-        for c in in_country
-        if core_topic_share(c, topic_ids) >= cohort.core_topic_share_min
-    ]
     funnel.record(
         "core topic share",
         f"share of work in the subfield at least {cohort.core_topic_share_min}",
-        len(on_topic),
+        on_topic,
     )
-
-    at_university = [
-        c for c in on_topic if has_university_affiliation(c, cohort.institution_types)
-    ]
     funnel.record(
         "university",
         f"an affiliation of type {'|'.join(cohort.institution_types)}",
-        len(at_university),
+        len(kept),
     )
-    return at_university
+    return kept
 
 
 def build_pool(
