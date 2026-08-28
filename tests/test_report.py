@@ -190,6 +190,7 @@ def written_report(tmp_path, config_dict, **overrides):
         config=config,
         horizon=6,
         career_year=11,
+        final_year_incomplete=False,
         placements=place_subject(metrics, rows, 6),
         rows=rows,
         venues=[("Chemistry of Materials", 400, 9.1, True)],
@@ -258,6 +259,7 @@ def test_a_withheld_cell_is_shown_as_withheld(tmp_path, config_dict):
         config=config,
         horizon=6,
         career_year=6,
+        final_year_incomplete=False,
         placements=place_subject(metrics, rows, 6),
         rows=rows,
         venues=[],
@@ -308,3 +310,18 @@ def test_the_venue_list_leaves_out_preprints_and_meeting_abstracts():
     listed = [name for name, *_ in top_venues(kept, {"S1": 9.0}, 5.0)]
     assert listed == ["Chem Mater"]
     assert "arXiv" not in listed
+
+
+def test_a_window_still_running_is_flagged(tmp_path, config_dict):
+    """A subject whose final career year is the current calendar year has had
+    part of a year where every cohort member had all of it."""
+    text = written_report(
+        tmp_path, config_dict, horizon=6, career_year=6, final_year_incomplete=True
+    ).read_text(encoding="utf-8")
+    assert "still running" in text
+    assert "partial year short" in text
+
+
+def test_a_finished_window_is_not_flagged(tmp_path, config_dict):
+    text = written_report(tmp_path, config_dict).read_text(encoding="utf-8")
+    assert "still running" not in text

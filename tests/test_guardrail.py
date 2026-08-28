@@ -212,32 +212,17 @@ def test_committed_example_results_are_aggregates_only(results_dir):
 # ------------------------------------------------ the committed example output
 
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-EXAMPLES = REPO_ROOT / "examples"
-
-
 @pytest.mark.parametrize(
-    "example", sorted(p.name for p in EXAMPLES.iterdir() if p.is_dir())
-)
-def test_committed_example_results_are_aggregates_only(example):
-    """CLAUDE.md rule 1, enforced on the files actually in the repository.
-
-    These directories are committed and public. If one of them ever carries a
-    cohort member's name or ID, it is already published by the time anyone
-    notices, so the check belongs in the suite rather than in a review.
-    """
-    results = EXAMPLES / example / "results"
-    if not results.is_dir():
-        pytest.skip(f"{example} has not been run yet")
-    assert_directory_aggregates_only(results)
-
-
-@pytest.mark.parametrize(
-    "example", sorted(p.name for p in EXAMPLES.iterdir() if p.is_dir())
+    "example",
+    sorted(p.name for p in (REPO_ROOT / "examples").iterdir() if p.is_dir()),
 )
 def test_committed_examples_carry_no_private_data(example):
-    """`data/` and `.cache/` hold names and must never be committed."""
+    """`data/` and `.cache/` hold cohort members' names and are never committed.
+
+    The aggregates-only check above reads the results files. This one checks
+    that the directories which are allowed to hold names did not come along.
+    """
     for forbidden in ("data", ".cache"):
-        assert not (EXAMPLES / example / forbidden).exists(), (
-            f"{example}/{forbidden} would publish cohort members' names"
+        assert not (REPO_ROOT / "examples" / example / forbidden).exists(), (
+            f"examples/{example}/{forbidden} would publish cohort members' names"
         )

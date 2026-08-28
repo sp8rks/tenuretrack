@@ -301,6 +301,7 @@ def write_report(
     config: Config,
     horizon: int,
     career_year: int,
+    final_year_incomplete: bool,
     placements: Sequence[SubjectPlacement],
     rows: Sequence[Quartiles],
     venues: Sequence[tuple[str, int, float | None, bool]],
@@ -321,6 +322,13 @@ def write_report(
         f"{subject.institution_name} in {subject.start_year}, which makes this "
         f"career year {career_year}.",
     ]
+    if final_year_incomplete:
+        lines.append(
+            f"Career year {horizon} is {subject.start_year + horizon - 1}, which "
+            "is still running. Everything counted for this record stops at "
+            "today, while every cohort member had the whole of their year "
+            f"{horizon}. Read this record's figures as a partial year short."
+        )
     if career_year > horizon:
         lines.append(
             f"The cohort is compared at year {horizon}, the end of the benchmark "
@@ -458,6 +466,9 @@ def build_report(
     results = Path(results_dir) if results_dir is not None else config.output.dir
     career_year = config.subject.career_year(this_year)
     horizon = comparison_horizon(career_year, config.cohort.horizon_years)
+    # The last year of the window is the calendar year we are standing in, so
+    # the subject has had part of a year where the cohort had all of it.
+    final_year_incomplete = config.subject.start_year + horizon - 1 >= this_year
 
     works = subject_works(client, config, this_year)
     if on_progress:
@@ -494,6 +505,7 @@ def build_report(
         config=config,
         horizon=horizon,
         career_year=career_year,
+        final_year_incomplete=final_year_incomplete,
         placements=placements,
         rows=benchmarks.rows,
         venues=venues,
