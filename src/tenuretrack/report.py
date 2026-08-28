@@ -23,6 +23,7 @@ is the subject, and only because they ran the tool on themselves.
 
 from __future__ import annotations
 
+import csv
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -51,9 +52,14 @@ __all__ = [
     "subject_works",
     "top_venues",
     "write_report",
+    "write_subject_csv",
+    "write_venues_csv",
+    "load_venues",
 ]
 
 REPORT_MD = "report.md"
+SUBJECT_CSV = "subject.csv"
+VENUES_CSV = "venues.csv"
 TOP_VENUES = 15
 
 BELOW_P25 = "below p25"
@@ -183,6 +189,95 @@ def top_venues(
         impact = impacts.get(source_id)
         is_top = bool(cutoff is not None and impact is not None and impact >= cutoff)
         out.append((names.get(source_id, source_id), count, impact, is_top))
+    return out
+
+
+def write_subject_csv(
+    path: str | Path,
+    placements: Sequence[SubjectPlacement],
+    *,
+    horizon: int,
+    career_year: int,
+) -> Path:
+    """The subject's row, machine-readable, so the deck never retypes a number.
+
+    The slides read this rather than parsing the prose report, which is how the
+    deck and the report are kept from disagreeing.
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(
+            [
+                "career_year",
+                "compared_at",
+                "metric",
+                "label",
+                "value",
+                "cohort_p25",
+                "cohort_p50",
+                "cohort_p75",
+                "position",
+                "compared",
+            ]
+        )
+        for placement in placements:
+            metric = _metric(placement.metric)
+            quartiles = placement.quartiles
+            withheld = quartiles is None or quartiles.suppressed
+            writer.writerow(
+                [
+                    career_year,
+                    horizon,
+                    placement.metric,
+                    metric.label,
+                    _fmt(placement.value, metric.decimals),
+                    "" if withheld else _fmt(quartiles.p25, metric.decimals),
+                    "" if withheld else _fmt(quartiles.p50, metric.decimals),
+                    "" if withheld else _fmt(quartiles.p75, metric.decimals),
+                    placement.position or ("not compared" if not placement.compared else ""),
+                    "yes" if placement.compared else "no",
+                ]
+            )
+    assert_aggregates_only(path)
+    return path
+
+
+def write_venues_csv(
+    path: str | Path, venues: Sequence[tuple[str, int, float | None, bool]]
+) -> Path:
+    """The subfield's venues, machine-readable, so the deck reads rather than reparses."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(["venue", "cohort_papers", "impact", "top_quartile"])
+        for name, count, impact, is_top in venues:
+            writer.writerow(
+                [name, count, "" if impact is None else f"{impact:.4f}",
+                 "yes" if is_top else "no"]
+            )
+    assert_aggregates_only(path)
+    return path
+
+
+def load_venues(results: str | Path) -> list[tuple[str, int, float | None, bool]]:
+    """Read the venue table back, for the deck."""
+    path = Path(results) / VENUES_CSV
+    if not path.exists():
+        return []
+    out = []
+    for row in csv.DictReader(path.read_text(encoding="utf-8").splitlines()):
+        impact = row.get("impact") or ""
+        out.append(
+            (
+                row["venue"],
+                int(row["cohort_papers"]),
+                float(impact) if impact else None,
+                row["top_quartile"] == "yes",
+            )
+        )
     return out
 
 
@@ -386,6 +481,13 @@ def build_report(
     )
     cohort_size = len(benchmarks.per_member.get(horizon, ()))
 
+    write_venues_csv(results / VENUES_CSV, venues)
+    write_subject_csv(
+        results / SUBJECT_CSV,
+        placements,
+        horizon=horizon,
+        career_year=career_year,
+    )
     path = write_report(
         results / REPORT_MD,
         config=config,

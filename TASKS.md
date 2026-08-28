@@ -67,9 +67,7 @@ A full run does not fit in the keyless budget. Size every new stage against this
 ## Task 11: Colab notebook
 
 Built ahead of tasks 2 to 8, on request, because the no-install path is what most
-faculty will use and it shapes what `init` and `run` need to print. The cells are
-in place and the glue is tested; the notebook only completes a real run once the
-stages above exist.
+faculty will use and it shapes what `init` and `run` need to print.
 
 - `tenuretrack/notebook.py`: `set_mailto`, `describe_config`, `keep_topics`,
   `list_results`, `zip_results`. No IPython import, no network, fully tested.

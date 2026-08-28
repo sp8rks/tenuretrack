@@ -27,7 +27,8 @@ from tenuretrack.openalex import (
     mailto_from_env,
 )
 from tenuretrack.pool import build_pool
-from tenuretrack.report import build_report
+from tenuretrack.report import build_report, load_venues
+from tenuretrack.slides import build_slides, export_pdf, load_slide_data
 from tenuretrack.subject import InitError, format_result, initialize
 
 app = typer.Typer(
@@ -67,6 +68,12 @@ CACHE_OPTION = typer.Option(
     DEFAULT_CACHE_DIR,
     "--cache-dir",
     help="Where OpenAlex responses are cached, so a rerun repeats no requests.",
+)
+RESULTS_OPTION = typer.Option(
+    None, "--results-dir", help="Where the pipeline wrote its output."
+)
+PDF_OPTION = typer.Option(
+    True, "--pdf/--no-pdf", help="Also export a PDF if LibreOffice is present."
 )
 DATA_OPTION = typer.Option(
     Path("data"),
@@ -310,10 +317,30 @@ def chaperone(config_path: Path = CONFIG_OPTION) -> None:
 
 
 @app.command()
-def slides(config_path: Path = CONFIG_OPTION) -> None:
-    """Build the six-slide deck from an existing results directory."""
-    _load(config_path)
-    _not_implemented("slides", "task 8")
+def slides(
+    config_path: Path = CONFIG_OPTION,
+    results_dir: Path = RESULTS_OPTION,
+    pdf: bool = PDF_OPTION,
+) -> None:
+    """Build the six-slide deck from an existing results directory.
+
+    Reads only what `run` already wrote. Nothing is recomputed, so the deck
+    cannot disagree with the report.
+    """
+    config = _load(config_path)
+    results = results_dir or config.output.dir
+    data = load_slide_data(results, config)
+    if not data.subject:
+        _echo_err(
+            f"no {results}/subject.csv, so there is nothing to put on a slide. "
+            "Run `tenuretrack run` first."
+        )
+        raise typer.Exit(code=EXIT_BAD_CONFIG)
+
+    data.venues = load_venues(results)
+    deck = build_slides(data, results, on_progress=typer.echo)
+    if pdf:
+        export_pdf(deck, on_progress=typer.echo)
 
 
 @app.command("show-cohort")

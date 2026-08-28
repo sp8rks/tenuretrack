@@ -187,12 +187,21 @@ def test_run_exits_separately_when_the_quota_runs_out(monkeypatch, tmp_path, con
     assert "rerunning repeats no requests" in text(result)
 
 
-@pytest.mark.parametrize("command", ["chaperone", "slides", "show-cohort"])
+@pytest.mark.parametrize("command", ["chaperone", "show-cohort"])
 def test_offline_stubs_still_validate_the_config(tmp_path, config_dict, command):
     path = write_config(tmp_path, config_dict)
     result = runner.invoke(app, [command, "--config", str(path)])
     assert result.exit_code == EXIT_NOT_IMPLEMENTED
     assert "not implemented yet" in text(result)
+
+
+def test_slides_says_what_to_run_first_when_there_is_no_output(tmp_path, config_dict):
+    path = write_config(tmp_path, config_dict)
+    result = runner.invoke(
+        app, ["slides", "--config", str(path), "--results-dir", str(tmp_path / "nope")]
+    )
+    assert result.exit_code == EXIT_BAD_CONFIG
+    assert "tenuretrack run" in text(result)
 
 
 def test_show_cohort_warns_that_its_output_is_private(tmp_path, config_dict):
