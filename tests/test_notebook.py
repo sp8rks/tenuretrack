@@ -342,3 +342,33 @@ def test_the_secret_scanner_would_actually_catch_a_key():
     assert SECRET_SHAPED.search("key = Xk3Qz9Rb2Tn7Vw4Ly8Ms1")  # invented, not a real key
     assert not SECRET_SHAPED.search("appointment_start_year = 2019")
     assert not SECRET_SHAPED.search("openalex.org/settings/api")
+
+
+def test_the_notebook_asks_about_a_stopped_clock():
+    """Parental leave, medical leave and pandemic extensions are ordinary, and a
+    notebook user has no other way to say so."""
+    joined = notebook_source()
+    assert "years_the_clock_was_stopped = 0" in joined
+    assert "--clock-extension" in joined
+    assert "Leave it at 0 if" in joined
+
+
+def notebook_prose() -> str:
+    """Notebook source with line wrapping flattened.
+
+    Markdown cells are hard-wrapped, so a sentence a test cares about is split
+    across lines in the file and matches nothing verbatim.
+    """
+    return re.sub(r"\s+", " ", notebook_source())
+
+
+def test_the_notebook_says_the_extension_stays_local():
+    prose = notebook_prose()
+    assert "not sent to OpenAlex" in prose
+    assert "nothing about why the clock stopped is asked for or recorded" in prose
+
+
+def test_the_notebook_explains_why_the_extension_matters():
+    prose = notebook_prose()
+    assert "compared against people at year five" in prose
+    assert "does not un-write what you published" in prose

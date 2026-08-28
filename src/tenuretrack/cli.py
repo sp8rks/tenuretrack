@@ -64,6 +64,14 @@ INIT_CONFIG_OPTION = typer.Option(
     "-c",
     help="Where to write the draft subject spec.",
 )
+EXTENSION_OPTION = typer.Option(
+    0,
+    "--clock-extension",
+    help=(
+        "Years the tenure clock was stopped (parental or medical leave, a "
+        "pandemic extension). Moves the comparison back that many years."
+    ),
+)
 CACHE_OPTION = typer.Option(
     DEFAULT_CACHE_DIR,
     "--cache-dir",
@@ -150,6 +158,7 @@ def init(
     start: int = typer.Option(
         ..., "--start", help="First calendar year of the tenure-line appointment."
     ),
+    clock_extension: int = EXTENSION_OPTION,
     config_path: Path = INIT_CONFIG_OPTION,
     cache_dir: Path = CACHE_OPTION,
     force: bool = typer.Option(
@@ -170,7 +179,11 @@ def init(
     with OpenAlexClient(mailto=mailto, cache_dir=cache_dir) as client:
         try:
             result = initialize(
-                client, orcid=orcid, institution=institution, start_year=start
+                client,
+                orcid=orcid,
+                institution=institution,
+                start_year=start,
+                clock_extension_years=clock_extension,
             )
         except InitError as exc:
             _echo_err(str(exc))

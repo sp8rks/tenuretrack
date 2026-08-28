@@ -188,6 +188,7 @@ class InitResult:
     combined_reach: int | None = None
     basis: str = "anchored"
     current_career_year: int = 1
+    clock_extension_years: int = 0
     notes: tuple[str, ...] = ()
     config: Mapping[str, object] = field(default_factory=dict)
 
@@ -521,6 +522,7 @@ def initialize(
     orcid: str,
     institution: str,
     start_year: int,
+    clock_extension_years: int = 0,
     today: _dt.date | None = None,
 ) -> InitResult:
     """Run the whole `init` stage and return what it found."""
@@ -572,6 +574,7 @@ def initialize(
         combined_reach=combined_reach,
         basis=basis,
         current_career_year=this_year - start_year + 1,
+        clock_extension_years=max(0, clock_extension_years),
         notes=tuple(
             _notes(
                 place,
@@ -729,6 +732,7 @@ def draft_config(result: InitResult) -> dict:
             "institution_ror": result.institution.ror,
             "institution_name": result.institution.name,
             "start_year": result.start_year,
+            "clock_extension_years": result.clock_extension_years,
             "clock_notes": "",
         },
         "subfield": {
@@ -771,9 +775,15 @@ def format_result(result: InitResult) -> str:
     lines = [
         f"Subject: {result.subject_name} ({result.author_id})",
         f"Institution: {place.name} ({place.ror})",
-        f"Appointment began {result.start_year}, so you are in career year "
-        f"{result.current_career_year}.",
+        f"Appointment began {result.start_year}, so you are in calendar year "
+        f"{result.current_career_year} of the appointment.",
     ]
+    if result.clock_extension_years:
+        clock = max(1, result.current_career_year - result.clock_extension_years)
+        lines.append(
+            f"Clock stopped for {result.clock_extension_years} year(s), so you "
+            f"are at year {clock} of the tenure clock and will be compared there."
+        )
     if result.alt_author_ids:
         lines.append(f"Merged profiles: {', '.join(result.alt_author_ids)}")
     lines.append("")
