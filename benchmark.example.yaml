@@ -5,7 +5,7 @@ subject:
   name: "Jane Doe"                      # appears in the subject's own report only
   orcid: "0000-0000-0000-0000"
   openalex_author_ids: []               # filled by init; extra IDs if the profile is split
-  institution_ror: "https://ror.org/00000000"
+  institution_ror: "https://ror.org/000000000"
   institution_name: "University of X"
   start_year: 2021                      # first year of the tenure-line appointment
   clock_notes: ""                       # e.g. "converted from lecturer line in 2020"

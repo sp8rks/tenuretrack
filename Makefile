@@ -1,8 +1,8 @@
 .PHONY: test lint run chaperone slides
 test:
-	pytest -q
+	python -m pytest -q
 lint:
-	ruff check src tests
+	python -m ruff check src tests
 run:
 	tenuretrack run --config $${CONFIG:-benchmark.yaml}
 chaperone:
