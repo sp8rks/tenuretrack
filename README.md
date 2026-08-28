@@ -16,7 +16,16 @@ A short report (Markdown, CSV, and a six-slide PPTX) containing:
 - **Venue list**: the journals your subfield actually publishes in, with impact values, so "Q1" means Q1 in your field and not someone else's
 - **Chaperone report** (optional): whether the cohort's flagship-venue papers are led from their own groups or co-authored on senior colleagues' papers
 
-## Quick start
+## Quick start, in your browser
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/sp8rks/tenuretrack/blob/main/notebooks/tenuretrack_colab.ipynb)
+
+No install, no Python. Open the notebook, type your ORCID, your university, your
+start year, and your email, and run the cells from the top. It installs the tool
+on a temporary Google machine, builds your cohort, shows the report, and hands
+you a zip. See [notebooks/](notebooks/).
+
+## Quick start, on your own machine
 
 ```bash
 pip install tenuretrack

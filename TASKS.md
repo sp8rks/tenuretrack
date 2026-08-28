@@ -52,5 +52,22 @@ One task per PR, in order. Each PR must include tests and pass `make test`. Open
 ## Task 10: Example 2, Second Subject (battery materials)
 - Run the full pipeline on `examples/second-subject/benchmark.yaml`. Subject is mid-clock, so the report computes the cohort at her current career year as well as year 6. Commit `results/` and the deck.
 
-## Task 11: Docs and release
+## Task 11: Colab notebook
+
+Built ahead of tasks 2 to 8, on request, because the no-install path is what most
+faculty will use and it shapes what `init` and `run` need to print. The cells are
+in place and the glue is tested; the notebook only completes a real run once the
+stages above exist.
+
+- `tenuretrack/notebook.py`: `set_mailto`, `describe_config`, `keep_topics`,
+  `list_results`, `zip_results`. No IPython import, no network, fully tested.
+- `notebooks/tenuretrack_colab.ipynb`: install, optional Drive mount for a
+  resumable cache, `init`, topic review by number, `run`, report display, guarded
+  zip download. Drives the CLI; never forks the pipeline.
+- Tests: committed notebooks carry no saved output, prose stays descriptive, no
+  email address is hardcoded, `zip_results` refuses to bundle a guardrail failure.
+- Remaining: re-run the notebook end to end after task 8 and update the wording
+  where `init` and `run` print something the cells should explain.
+
+## Task 12: Docs and release
 - Finish `docs/methods.md` from the implemented code, `docs/beyond-papers.md`, `CITATION.cff`, README quick start verified end to end on a fresh clone, tag `v0.1.0`.
