@@ -194,6 +194,7 @@ class InitResult:
     institution_alternatives: tuple[Institution, ...] = ()
     works_seen: int = 0
     window_works: int = 0
+    fetched_from: int = 0
     basis: str = "anchored"
     current_career_year: int = 1
     notes: tuple[str, ...] = ()
@@ -356,7 +357,26 @@ def is_split_profile(primary: Mapping, candidate: Mapping, ror: str) -> bool:
 def _names_match(primary: Mapping, candidate: Mapping) -> bool:
     primary_keys = {_name_key(n) for n in _all_names(primary)} - {None}
     candidate_keys = {_name_key(n) for n in _all_names(candidate)} - {None}
-    return bool(primary_keys & candidate_keys)
+    return any(
+        _keys_agree(left, right) for left in primary_keys for right in candidate_keys
+    )
+
+
+def _keys_agree(left: tuple[str, str], right: tuple[str, str]) -> bool:
+    """Same surname, and first names that can be the same person's.
+
+    Two spelled-out first names have to match outright. Matching on the initial
+    alone would merge `Tyler Sparks` into `Taylor Sparks`, and OpenAlex has
+    plenty of both at one university. An initial only matches a full name when
+    one side is genuinely abbreviated, which is the `J. Doe` case that split
+    profiles actually take.
+    """
+    if left[0] != right[0]:
+        return False
+    first, other = left[1], right[1]
+    if len(first) == 1 or len(other) == 1:
+        return first[0] == other[0]
+    return first == other
 
 
 def _all_names(record: Mapping) -> list[str]:
@@ -368,12 +388,20 @@ def _all_names(record: Mapping) -> list[str]:
 
 
 def _name_key(name: str) -> tuple[str, str] | None:
-    """`Jane Q. Doe` and `J. Doe` both key to (doe, j)."""
-    cleaned = _PUNCTUATION.sub(" ", _strip_accents(name).lower())
+    """Surname and first name, normalized. `Jane Q. Doe` keys to (doe, jane).
+
+    OpenAlex writes names both ways round, so `Sparks, Taylor D.` has to key the
+    same as `Taylor D. Sparks`. A trailing comma in the raw string is the tell.
+    """
+    raw = _strip_accents(name).lower()
+    inverted = "," in raw
+    cleaned = _PUNCTUATION.sub(" ", raw)
     parts = [p for p in _WHITESPACE.split(cleaned) if p and p not in _NAME_SUFFIXES]
     if len(parts) < 2:
         return None
-    return parts[-1], parts[0][0]
+    if inverted:
+        return parts[0], parts[1]
+    return parts[-1], parts[0]
 
 
 def _strip_accents(text: str) -> str:
@@ -640,9 +668,8 @@ def initialize(
     alt_ids = tuple(sorted(_short_author_id(s.get("id")) for s in splits))
     author_ids = (primary_id, *alt_ids)
 
-    works = fetch_works(
-        client, author_ids, max(1900, start_year - LOOKBACK_YEARS), this_year
-    )
+    first_year = max(1900, start_year - LOOKBACK_YEARS)
+    works = fetch_works(client, author_ids, first_year, this_year)
     defaults = CohortSpec()
     window, basis = select_window_works(
         works, author_ids, place.ror, start_year, defaults.article_types
@@ -667,6 +694,7 @@ def initialize(
         institution_alternatives=alternatives,
         works_seen=len(works),
         window_works=len(window),
+        fetched_from=first_year,
         basis=basis,
         current_career_year=this_year - start_year + 1,
         notes=tuple(
@@ -786,8 +814,8 @@ def format_result(result: InitResult) -> str:
         lines.append(f"Merged profiles: {', '.join(result.alt_author_ids)}")
     lines.append("")
     lines.append(
-        f"Read {result.window_works} paper(s) out of {result.works_seen} on record: "
-        f"{basis}."
+        f"Read {result.window_works} paper(s) of the {result.works_seen} OpenAlex "
+        f"lists for you from {result.fetched_from} on: {basis}."
     )
     lines.append(f"Subfield: {result.label}")
     lines.append("")

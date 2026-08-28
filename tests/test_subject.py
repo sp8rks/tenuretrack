@@ -372,6 +372,28 @@ def test_accents_and_suffixes_do_not_block_a_match():
     assert is_split_profile(author(name="Jané Doe"), fragment, ROR)
 
 
+def test_a_different_first_name_with_the_same_initial_is_not_merged():
+    """Tyler Sparks is not Taylor Sparks, however small the profile."""
+    namesake = author(ident="A101", name="Tyler Sparks", orcid=None, works_count=2)
+    assert not is_split_profile(author(name="Taylor Sparks"), namesake, ROR)
+
+
+def test_an_abbreviated_first_name_still_matches():
+    fragment = author(ident="A101", name="T. Sparks", orcid=None, works_count=2)
+    assert is_split_profile(author(name="Taylor Sparks"), fragment, ROR)
+
+
+def test_a_surname_first_alternative_matches():
+    """OpenAlex writes the same person as `Sparks, Taylor` and `Taylor Sparks`."""
+    fragment = author(
+        ident="A101",
+        name="Sparks, Taylor",
+        orcid=None,
+        works_count=2,
+    )
+    assert is_split_profile(author(name="Taylor Sparks"), fragment, ROR)
+
+
 # ---------------------------------------------------------------- the network
 
 
@@ -651,6 +673,7 @@ def test_the_printout_shows_the_evidence_for_each_topic(tmp_path):
     text = format_result(result_for(tmp_path))
     assert "T10001" in text
     assert "4 of your papers" in text
+    assert "from 2011 on" in text
     assert "Journal of T10001" in text
 
 
