@@ -1,0 +1,42 @@
+cff-version: 1.2.0
+title: "tenuretrack: subfield publication norms for the tenure clock from OpenAlex"
+message: "If this tool informed an RPT discussion or a publication, please cite it and OpenAlex."
+type: software
+authors:
+  - family-names: Sparks
+    given-names: Taylor D.
+    affiliation: University of Utah
+repository-code: "https://github.com/sp8rks/tenuretrack"
+license: MIT
+version: 0.1.0
+date-released: 2026-09-01
+references:
+  - type: article
+    title: "OpenAlex: A fully-open index of scholarly works, authors, venues, institutions, and concepts"
+    authors:
+      - family-names: Priem
+        given-names: Jason
+      - family-names: Piwowar
+        given-names: Heather
+      - family-names: Orr
+        given-names: Richard
+    year: 2022
+    url: "https://arxiv.org/abs/2205.01833"
+  - type: article
+    title: "The chaperone effect in scientific publishing"
+    authors:
+      - family-names: Sekara
+        given-names: Vedran
+      - family-names: Deville
+        given-names: Pierre
+      - family-names: Ahnert
+        given-names: Sebastian E.
+      - family-names: Barabási
+        given-names: Albert-László
+      - family-names: Sinatra
+        given-names: Roberta
+      - family-names: Lehmann
+        given-names: Sune
+    journal: "Proceedings of the National Academy of Sciences"
+    year: 2018
+    doi: "10.1073/pnas.1800471115"

@@ -1,0 +1,35 @@
+# Example 2: a mid-clock subject in battery materials. The report computes the
+# cohort at her current career year as well as the year-6 destination.
+# Included with the subject's permission; remove or anonymize if that changes.
+
+subject:
+  name: "Huiwen Ji"
+  orcid: "FILL_ME"                       # init resolves this; her main OpenAlex profile is known to be
+                                         # conflated with namesakes, so verify and list alt IDs below
+  openalex_author_ids: []
+  institution_ror: "https://ror.org/03r0ha626"   # University of Utah
+  institution_name: "University of Utah"
+  start_year: 2021
+  clock_notes: "Assistant Professor, Materials Science and Engineering, from January 2021."
+
+subfield:
+  label: "battery cathodes and solid electrolytes"
+  topics: []                             # init proposes these; expected to land on battery materials,
+                                         # solid electrolytes, magnetic oxides, and solid-state synthesis
+  excluded_topics: []
+
+cohort:
+  start_window: [2008, 2018]
+  horizon_years: 6
+  countries: ["US"]
+  institution_types: ["education"]
+  core_topic_share_min: 0.25
+  min_led_papers: 3
+  min_cell_size: 5
+  bootstrap_iterations: 2000
+  article_types: ["article"]
+
+output:
+  dir: examples/huiwen-ji/results
+  slides: true
+  chaperone: true
