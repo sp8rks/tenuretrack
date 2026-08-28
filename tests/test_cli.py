@@ -111,6 +111,7 @@ def patch_pool(monkeypatch, outcome, members=(), tmp_path=None):
 
         return BenchmarkResult(
             per_member={}, rows=[], impacts={}, cutoff=None, works_by_member={},
+            headline_papers=[],
             institutions=42, csv_path=Path("benchmarks.csv"),
             md_path=Path("benchmarks.md"),
         )
@@ -118,7 +119,13 @@ def patch_pool(monkeypatch, outcome, members=(), tmp_path=None):
     monkeypatch.setattr(cli, "build_pool", pool_stage)
     monkeypatch.setattr(cli, "build_starts", career_stage)
     monkeypatch.setattr(cli, "candidates_worth_asking", lambda cands, _w: list(cands))
+    def report_stage(_client, config, _benchmarks, _funnel, **_kwargs):
+        from tenuretrack.metrics import MemberMetrics
+
+        return Path("report.md"), MemberMetrics(author_id="A1", horizon=6, pubs=18, led=7), 6
+
     monkeypatch.setattr(cli, "build_benchmarks", benchmarks_stage)
+    monkeypatch.setattr(cli, "build_report", report_stage)
 
 
 def fake_pool(kept=3, tmp_path=None):
@@ -140,19 +147,19 @@ def fake_pool(kept=3, tmp_path=None):
     )
 
 
-def test_run_builds_the_pool_then_reports_what_is_not_built_yet(
+def test_run_completes_the_whole_pipeline(
     monkeypatch, tmp_path, config_dict
 ):
     monkeypatch.setenv(MAILTO_ENV_VAR, "tester@example.edu")
     patch_pool(monkeypatch, fake_pool(kept=7, tmp_path=tmp_path), members=range(4))
     path = write_config(tmp_path, config_dict)
     result = runner.invoke(app, ["run", "--config", str(path)])
-    assert result.exit_code == EXIT_NOT_IMPLEMENTED
+    assert result.exit_code == 0, text(result)
     out = text(result)
     assert "4 people placed on the tenure clock" in out
     assert "42 institutions in the cohort" in out
     assert "Funnel:" in out
-    assert "not implemented yet" in out
+    assert "18 articles and 7 led" in out
     assert (tmp_path / "results" / "funnel.csv").exists()
 
 

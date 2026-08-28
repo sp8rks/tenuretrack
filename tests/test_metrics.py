@@ -437,19 +437,20 @@ def test_build_metrics_holds_the_venue_cutoff_fixed_across_horizons(config_dict)
         a: StartEstimate(a, 2010, AFFILIATION_LED, HIGH) for a in ("A1", "A2")
     }
     impacts = {"S1": 1.0, "S2": 4.0, "S3": 9.0}
-    per_member, rows, cutoff = build_metrics(works, starts, config, impacts)
+    per_member, rows, cutoff, headline = build_metrics(works, starts, config, impacts)
 
     assert cutoff is not None
     assert set(per_member) == {1, 2, 3}
     # Year 1 sees only S1, but the cutoff came from the whole headline window.
     assert cutoff > 1.0
+    assert headline, "the venue list is built from these"
 
 
 def test_people_without_a_start_are_left_out(config_dict):
     config = config_for(config_dict, horizon_years=1, bootstrap_iterations=100)
     works = {"A1": [paper(2010)], "A2": [paper(2010)]}
     starts = {"A1": StartEstimate("A1", 2010, AFFILIATION_LED, HIGH)}
-    per_member, _, _ = build_metrics(works, starts, config, {})
+    per_member, _, _, _ = build_metrics(works, starts, config, {})
     assert [m.author_id for m in per_member[1]] == ["A1"]
 
 

@@ -7,6 +7,7 @@ tasks, and each stub says which task will fill it in.
 
 from __future__ import annotations
 
+import datetime as _dt
 from pathlib import Path
 
 import typer
@@ -25,6 +26,7 @@ from tenuretrack.openalex import (
     mailto_from_env,
 )
 from tenuretrack.pool import build_pool
+from tenuretrack.report import build_report
 from tenuretrack.subject import InitError, format_result, initialize
 
 app = typer.Typer(
@@ -247,6 +249,14 @@ def run(
                 data_dir=data_dir,
                 on_progress=typer.echo,
             )
+            report_path, subject, horizon = build_report(
+                client,
+                config,
+                benchmarks,
+                result.funnel,
+                this_year=_dt.date.today().year,
+                on_progress=typer.echo,
+            )
         except QuotaExhausted as exc:
             # Everything fetched is cached and the funnel so far is on disk, so
             # the rerun picks up here rather than starting over.
@@ -269,7 +279,10 @@ def run(
         f"Wrote {benchmarks.csv_path.name} and {benchmarks.md_path.name} "
         f"({benchmarks.institutions} institutions in the cohort)."
     )
-    _not_implemented("the subject comparison and the report", "task 6")
+    typer.echo(
+        f"Wrote {report_path.name}: {config.subject.name} at career year "
+        f"{horizon}, {subject.pubs} articles and {subject.led} led."
+    )
 
 
 def _echo_funnel(funnel) -> None:

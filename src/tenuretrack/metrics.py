@@ -108,6 +108,10 @@ class BenchmarkResult:
     impacts: dict
     cutoff: float | None
     works_by_member: dict
+    headline_papers: list
+    """The cohort's window journal articles. What the venue list must count:
+    everything else on a person's record includes preprints and meeting
+    abstracts, which are not where the subfield publishes."""
     institutions: int
     csv_path: Path
     md_path: Path
@@ -544,8 +548,9 @@ def build_metrics(
     *,
     horizons: Sequence[int] | None = None,
     rng: np.random.Generator | None = None,
-) -> tuple[dict[int, list[MemberMetrics]], list[Quartiles], float | None]:
-    """Metrics per person per horizon, the quartile table, and the venue cutoff."""
+) -> tuple[dict[int, list[MemberMetrics]], list[Quartiles], float | None, list[Work]]:
+    """Metrics per person per horizon, the quartile table, the venue cutoff, and
+    the window papers the cutoff and the venue list are both built from."""
     horizons = tuple(horizons or config.cohort.horizons)
     article_types = config.cohort.article_types
     headline = max(horizons)
@@ -580,7 +585,12 @@ def build_metrics(
             )
         per_member[horizon] = rows
 
-    return per_member, benchmark_table(per_member, config, rng=rng), cutoff
+    return (
+        per_member,
+        benchmark_table(per_member, config, rng=rng),
+        cutoff,
+        headline_papers,
+    )
 
 
 def collect_member_works(
@@ -660,7 +670,7 @@ def build_benchmarks(
         (w.source_id for works in works_by_member.values() for w in works),
         on_progress=on_progress,
     )
-    per_member, rows, cutoff = build_metrics(
+    per_member, rows, cutoff, headline_papers = build_metrics(
         works_by_member, starts, config, impacts, rng=rng
     )
 
@@ -687,6 +697,7 @@ def build_benchmarks(
         impacts=impacts,
         cutoff=cutoff,
         works_by_member=works_by_member,
+        headline_papers=headline_papers,
         institutions=institutions,
         csv_path=csv_path,
         md_path=md_path,
