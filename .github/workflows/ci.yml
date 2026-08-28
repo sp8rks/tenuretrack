@@ -10,6 +10,22 @@ jobs:
           python-version: "3.11"
       - run: pip install -e ".[dev]"
       - run: make test
-      # Guardrail: no author IDs or ORCIDs in anything committed under examples/
-      - run: |
-          ! grep -rEn '\bA[0-9]{7,}\b|[0-9]{4}-[0-9]{4}-[0-9]{4}-[0-9]{3}[0-9X]' examples/*/results/ || (echo "identifying data in results" && exit 1)
+      - run: make lint
+      # Defence in depth. tests/test_guardrail.py scans the same directories
+      # with the real guardrail; this catches the case where that test is
+      # accidentally removed or skipped.
+      - name: No identifying data in committed results
+        run: |
+          shopt -s nullglob
+          dirs=(examples/*/results)
+          if [ ${#dirs[@]} -eq 0 ]; then
+            echo "no committed results yet, nothing to scan"
+            exit 0
+          fi
+          # -l prints the file name only. Never print the matching line: CI
+          # logs are public, and the match is the thing we are protecting.
+          if grep -rIlE '\bA[0-9]{7,}\b|[0-9]{4}-[0-9]{4}-[0-9]{4}-[0-9]{3}[0-9X]' "${dirs[@]}"; then
+            echo "identifying data in results"
+            exit 1
+          fi
+          echo "scanned: ${dirs[*]}"
