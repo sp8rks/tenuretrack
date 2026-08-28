@@ -14,9 +14,32 @@ All data is from OpenAlex (CC0). Author records give affiliations by year and to
 
 ## 3. Subject
 
-The subject supplies an ORCID, an institution ROR, and the first year of the tenure-line appointment. Career year is `publication_year - start_year + 1`. The subject's window papers are journal articles carrying the institution's byline in career years 1 through N. If the subject's works are split across several OpenAlex profiles, they are unioned by DOI.
+The subject supplies an ORCID, an institution (a name or a ROR), and the first calendar year of the tenure-line appointment. Career year is `publication_year - start_year + 1`.
 
-Topics are proposed from the subject's window papers, ranked by share, and confirmed by the subject. Four to six topics is the working range. Topics that carry only one or two of the subject's papers, or that would pull a distinct community into the cohort, should be excluded and the exclusion noted.
+### 3.1 Identity
+
+The ORCID resolves to one OpenAlex author record. OpenAlex sometimes splits one person across several author IDs, so `init` also searches for author profiles at the same institution whose name matches, and merges a candidate only when every one of these holds:
+
+- It is not the primary profile.
+- It carries no ORCID of its own, or carries the same one. A profile with a different ORCID is a different person.
+- A name key matches, comparing surname plus first initial across the display name and every `display_name_alternatives` entry, with accents and suffixes stripped.
+- It has at least one work, at most 10, and no more than half the primary profile's work count. Two profiles that both carry substantial output are two people until proven otherwise.
+- It lists the institution among its affiliations.
+- It shares at least one topic with the primary profile, which keeps a namesake in another field out.
+
+Works from the merged profiles are unioned by DOI, or by normalized title plus year when a DOI is missing. The merged IDs are written into `benchmark.yaml` so the run is reproducible and so the subject can see what was merged.
+
+### 3.2 Window
+
+The subject's window papers are journal articles (the shared `article_types` rule, preprint servers excluded) in career years 1 through N carrying the institution's byline. Papers from eight years before the appointment are fetched as well: they are outside the window, and they are what the career-start rules in section 5 read.
+
+### 3.3 Topics
+
+Topics are proposed from the window papers and confirmed by the subject before any cohort is built. Each paper votes once, for its OpenAlex `primary_topic`; counting every listed topic would let one paper vote five times. Topics are ranked by how many of the subject's papers sit in each, and each proposal is shown with the venues those papers ran in, so the subject can see what a topic actually represents in their record.
+
+A topic carrying fewer than three of the subject's papers is not proposed. If that leaves fewer than four topics, the count relaxes to two and the printout says the record is thin. Four to six topics is the working range, and six is the ceiling.
+
+Someone one or two years into the clock may have almost nothing published under the new byline yet, which is too thin to name a subfield from. When the institution-anchored set holds fewer than five papers, the proposal widens, first to every article published since the appointment began regardless of byline, then to the whole publication record. Widening never happens silently: the basis is printed with the proposal. Only the topic proposal widens. The window itself, and every number computed from it, stays anchored on the institution byline.
 
 ## 4. Cohort funnel
 

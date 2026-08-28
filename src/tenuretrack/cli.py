@@ -1,7 +1,7 @@
 """The `tenuretrack` command line.
 
-Task 1 registers every subcommand and wires up the parts that already exist
-(config loading, the polite-pool check). The stages themselves land in later
+Task 1 registered every subcommand and wired up config loading and the
+polite-pool check. Task 2 filled in `init`. The remaining stages land in later
 tasks, and each stub says which task will fill it in.
 """
 
@@ -10,10 +10,19 @@ from __future__ import annotations
 from pathlib import Path
 
 import typer
+import yaml
 
 from tenuretrack import __version__
 from tenuretrack.config import Config, ConfigError, load_config
-from tenuretrack.openalex import MailtoNotConfigured, mailto_from_env
+from tenuretrack.openalex import (
+    DEFAULT_CACHE_DIR,
+    MailtoNotConfigured,
+    OpenAlexClient,
+    OpenAlexError,
+    QuotaExhausted,
+    mailto_from_env,
+)
+from tenuretrack.subject import InitError, format_result, initialize
 
 app = typer.Typer(
     add_completion=False,
@@ -26,6 +35,15 @@ app = typer.Typer(
 
 EXIT_NOT_IMPLEMENTED = 1
 EXIT_BAD_CONFIG = 2
+EXIT_NETWORK = 3
+
+CONFIG_HEADER = """\
+# Written by `tenuretrack init`. Edit before running.
+#
+# The topic list is the one choice that matters. It defines who ends up in the
+# cohort, so drop anything here that is not really your field, and move it to
+# excluded_topics so the report can say what was left out.
+"""
 
 CONFIG_OPTION = typer.Option(
     Path("benchmark.yaml"),
@@ -38,6 +56,11 @@ INIT_CONFIG_OPTION = typer.Option(
     "--config",
     "-c",
     help="Where to write the draft subject spec.",
+)
+CACHE_OPTION = typer.Option(
+    DEFAULT_CACHE_DIR,
+    "--cache-dir",
+    help="Where OpenAlex responses are cached, so a rerun repeats no requests.",
 )
 
 
@@ -97,10 +120,59 @@ def init(
         ..., "--start", help="First calendar year of the tenure-line appointment."
     ),
     config_path: Path = INIT_CONFIG_OPTION,
+    cache_dir: Path = CACHE_OPTION,
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Overwrite an existing config. Any topic edits in it are lost.",
+    ),
 ) -> None:
     """Resolve the subject, propose subfield topics, and draft benchmark.yaml."""
-    _require_mailto()
-    _not_implemented("init", "task 2")
+    mailto = _require_mailto()
+    if config_path.exists() and not force:
+        _echo_err(
+            f"{config_path} already exists, and rewriting it would throw away the "
+            "topics you chose. Pass --force to start over, or edit the file."
+        )
+        raise typer.Exit(code=EXIT_BAD_CONFIG)
+
+    with OpenAlexClient(mailto=mailto, cache_dir=cache_dir) as client:
+        try:
+            result = initialize(
+                client, orcid=orcid, institution=institution, start_year=start
+            )
+        except InitError as exc:
+            _echo_err(str(exc))
+            raise typer.Exit(code=EXIT_BAD_CONFIG) from exc
+        except QuotaExhausted as exc:
+            _echo_err(str(exc))
+            raise typer.Exit(code=EXIT_NETWORK) from exc
+        except OpenAlexError as exc:
+            _echo_err(f"OpenAlex request failed: {exc}")
+            raise typer.Exit(code=EXIT_NETWORK) from exc
+        requests, hits = client.request_count, client.cache_hits
+
+    _write_config(config_path, result.config)
+    typer.echo(format_result(result))
+    typer.echo("")
+    typer.echo(f"Wrote {config_path}. Check the topics, then run `tenuretrack run`.")
+    typer.echo(f"OpenAlex requests: {requests} (served from cache: {hits})")
+
+
+def _write_config(path: Path, config: dict) -> None:
+    """Write the draft, then load it back so a bad draft fails here, not later."""
+    if path.parent != Path(""):
+        path.parent.mkdir(parents=True, exist_ok=True)
+    body = yaml.safe_dump(config, sort_keys=False, allow_unicode=True)
+    path.write_text(CONFIG_HEADER + body, encoding="utf-8")
+    try:
+        load_config(path)
+    except ConfigError as exc:
+        _echo_err(
+            f"init wrote {path} but it does not validate. This is a bug; please "
+            f"report it at github.com/sp8rks/tenuretrack/issues.\n{exc}"
+        )
+        raise typer.Exit(code=EXIT_BAD_CONFIG) from exc
 
 
 @app.command()

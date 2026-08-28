@@ -17,6 +17,7 @@ from tenuretrack.notebook import (
     list_results,
     numbered_topics,
     parse_selection,
+    run_cli,
     set_mailto,
     zip_results,
 )
@@ -227,3 +228,47 @@ def test_notebook_prose_stays_descriptive():
     for word in ("expected", "threshold", "target", "quota", "on track", "at risk"):
         assert word not in prose, f"notebook prose prescribes: {word}"
     assert "—" not in prose, "no em-dashes in prose"
+
+
+# ------------------------------------------- run_cli (the silent-failure guard)
+
+
+def test_run_cli_returns_what_the_command_printed():
+    printed = []
+    output = run_cli("--version", on_line=printed.append)
+    assert "tenuretrack" in output
+    assert printed  # the cell sees it live, not just at the end
+
+
+def test_run_cli_raises_instead_of_letting_a_failure_pass():
+    with pytest.raises(NotebookError) as caught:
+        run_cli("init", on_line=lambda _line: None)
+    message = str(caught.value)
+    assert "`init` step did not finish" in message
+    assert "exit code" in message
+
+
+def test_run_cli_quotes_the_error_back_to_the_reader(tmp_path, monkeypatch):
+    monkeypatch.setenv(MAILTO_ENV_VAR, "tester@example.edu")
+    with pytest.raises(NotebookError, match="no such config file"):
+        run_cli(
+            "run",
+            "--config",
+            str(tmp_path / "absent.yaml"),
+            on_line=lambda _line: None,
+        )
+
+
+def test_run_cli_reports_a_missing_executable():
+    import tenuretrack.notebook as notebook
+
+    def explode(*_args, **_kwargs):
+        raise OSError("no such file")
+
+    original = notebook.subprocess.Popen
+    notebook.subprocess.Popen = explode
+    try:
+        with pytest.raises(NotebookError, match="could not start tenuretrack"):
+            run_cli("--version")
+    finally:
+        notebook.subprocess.Popen = original

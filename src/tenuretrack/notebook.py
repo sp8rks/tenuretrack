@@ -13,8 +13,10 @@ The glue lives here rather than inside notebook cells so that it is covered by
 from __future__ import annotations
 
 import os
+import subprocess
+import sys
 import zipfile
-from collections.abc import Iterable, Mapping, MutableMapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, MutableMapping, Sequence
 from pathlib import Path
 
 import yaml
@@ -30,13 +32,63 @@ __all__ = [
     "list_results",
     "numbered_topics",
     "parse_selection",
+    "run_cli",
     "set_mailto",
     "zip_results",
 ]
 
+ERROR_TAIL_LINES = 12
+"""How much of a failed stage's output to quote back in the exception."""
+
 
 class NotebookError(RuntimeError):
     """A notebook step cannot proceed, worded for a first-time user."""
+
+
+def run_cli(
+    *args: object,
+    on_line: Callable[[str], None] = print,
+    cwd: str | Path | None = None,
+) -> str:
+    """Run a `tenuretrack` subcommand, printing as it goes, and check it worked.
+
+    A notebook cell that shells out with `!tenuretrack ...` prints the error and
+    carries on as if nothing happened, so the run fails silently in one cell and
+    raises something unreadable two cells later. This runs the same command,
+    streams its output into the cell so a long stage shows progress, and raises
+    `NotebookError` the moment the command exits nonzero.
+    """
+    command = [sys.executable, "-m", "tenuretrack.cli", *[str(a) for a in args]]
+    lines: list[str] = []
+    try:
+        process = subprocess.Popen(  # noqa: S603
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            encoding="utf-8",
+            errors="replace",
+            cwd=str(cwd) if cwd is not None else None,
+        )
+    except OSError as exc:
+        raise NotebookError(f"could not start tenuretrack: {exc}") from exc
+
+    with process:
+        assert process.stdout is not None
+        for raw in process.stdout:
+            line = raw.rstrip("\n")
+            lines.append(line)
+            on_line(line)
+
+    if process.returncode != 0:
+        stage = str(args[0]) if args else "tenuretrack"
+        tail = "\n".join(lines[-ERROR_TAIL_LINES:])
+        raise NotebookError(
+            f"the `{stage}` step did not finish (exit code {process.returncode}). "
+            f"What it said:\n{tail}"
+        )
+    return "\n".join(lines)
 
 
 def set_mailto(address: str, env: MutableMapping[str, str] | None = None) -> str:

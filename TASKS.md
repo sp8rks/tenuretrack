@@ -66,8 +66,11 @@ stages above exist.
   zip download. Drives the CLI; never forks the pipeline.
 - Tests: committed notebooks carry no saved output, prose stays descriptive, no
   email address is hardcoded, `zip_results` refuses to bundle a guardrail failure.
+- Task 2 replaced the `!tenuretrack ...` shell escapes with `notebook.run_cli`,
+  which streams output into the cell and raises on a nonzero exit. A stage that
+  fails now stops in its own cell instead of two cells later.
 - Remaining: re-run the notebook end to end after task 8 and update the wording
-  where `init` and `run` print something the cells should explain.
+  where `run` prints something the cells should explain.
 
 ## Task 12: Docs and release
 - Finish `docs/methods.md` from the implemented code, `docs/beyond-papers.md`, `CITATION.cff`, README quick start verified end to end on a fresh clone, tag `v0.1.0`.
