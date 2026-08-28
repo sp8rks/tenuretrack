@@ -7,7 +7,9 @@ setting the polite-pool address, picking which proposed topics to keep, and
 packaging `results/` for download after the guardrail has cleared it.
 
 The glue lives here rather than inside notebook cells so that it is covered by
-`make test`. Nothing in this module imports IPython or touches the network.
+`make test`. Nothing here touches the network. The only notebook-environment
+import is a guarded one for Colab's secret store, inside the function that
+needs it.
 """
 
 from __future__ import annotations
@@ -37,11 +39,19 @@ __all__ = [
     "list_results",
     "numbered_topics",
     "parse_selection",
+    "prompt_for_api_key",
     "run_cli",
     "set_api_key",
     "set_mailto",
     "zip_results",
 ]
+
+COLAB_SECRET_NAME = "OPENALEX_API_KEY"
+"""Name to look for in Colab's secret store (the key icon in the left sidebar).
+
+A secret lives in the user's Google account, not in the notebook file, so it
+survives sharing the notebook and does not travel with it.
+"""
 
 ERROR_TAIL_LINES = 12
 """How much of a failed stage's output to quote back in the exception."""
@@ -106,6 +116,60 @@ def set_mailto(address: str, env: MutableMapping[str, str] | None = None) -> str
     env = os.environ if env is None else env
     env[MAILTO_ENV_VAR] = (address or "").strip()
     return mailto_from_env(env)
+
+
+def prompt_for_api_key(
+    env: MutableMapping[str, str] | None = None,
+    *,
+    read_secret: Callable[[str], str] | None = None,
+    ask: Callable[[str], str] | None = None,
+) -> str:
+    """Get an OpenAlex key without ever writing it into the notebook file.
+
+    A Colab form field (`#@param`) looks like the obvious place to type a key,
+    and it is the wrong one: Colab saves form values back into the `.ipynb`, so
+    a key typed there is written to the user's Drive and travels with the file
+    if they share or download it. Nobody expects a text box to persist a
+    secret.
+
+    So this looks in three places, none of which is the notebook:
+
+    1. The environment, if the key is already set.
+    2. Colab's secret store, which lives in the user's Google account.
+    3. A hidden prompt, which keeps the key out of the cell output too.
+
+    Returns an empty string when there is no key, which is a supported way to
+    run.
+    """
+    env = os.environ if env is None else env
+    existing = (env.get(API_KEY_ENV_VAR) or "").strip()
+    if existing:
+        return existing
+
+    if read_secret is None:
+        read_secret = _colab_secret
+    try:
+        secret = (read_secret(COLAB_SECRET_NAME) or "").strip()
+    except Exception:  # noqa: BLE001 - any failure just means "no secret here"
+        secret = ""
+    if secret:
+        return secret
+
+    if ask is None:
+        import getpass
+
+        ask = getpass.getpass
+    try:
+        return (ask("OpenAlex API key (press Enter to skip): ") or "").strip()
+    except (EOFError, KeyboardInterrupt):
+        return ""
+
+
+def _colab_secret(name: str) -> str:
+    """Read one secret from Colab, or nothing at all when not in Colab."""
+    from google.colab import userdata  # type: ignore[import-not-found]
+
+    return userdata.get(name)
 
 
 def set_api_key(key: str, env: MutableMapping[str, str] | None = None) -> str:

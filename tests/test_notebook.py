@@ -299,15 +299,46 @@ def test_a_blank_key_is_allowed_and_says_what_it_costs():
     assert "openalex.org/settings/api" in message
 
 
-def test_the_notebook_asks_for_a_key_but_ships_without_one():
-    """The same rule as the email address: a key is a secret, not a default."""
+def notebook_source() -> str:
     import json
 
     nb = json.loads(NOTEBOOK.read_text(encoding="utf-8"))
-    cells = ["".join(cell["source"]) for cell in nb["cells"]]
-    joined = "\n".join(cells)
+    return chr(10).join("".join(cell["source"]) for cell in nb["cells"])
 
-    assert 'openalex_api_key = ""' in joined, "the key box must ship empty"
-    assert "openalex.org/settings/api" in joined, "say where to get one"
-    # No long opaque token pasted in by accident.
-    assert not re.search(r"[A-Za-z0-9_-]{32,}", joined)
+
+def test_the_notebook_has_no_form_box_for_the_api_key():
+    """Colab writes form values back into the .ipynb, so a key typed in a box is
+    a key written to the user's Drive that travels with the shared notebook."""
+    joined = notebook_source()
+    assert "#@param" in joined, "the other fields are still forms"
+    assert not re.search(r'api_key\s*=\s*""\s*#@param', joined)
+    assert "prompt_for_api_key" in joined, "the key is asked for at run time"
+
+
+def test_the_notebook_says_where_to_get_a_key_and_that_it_is_optional():
+    joined = notebook_source()
+    assert "openalex.org/settings/api" in joined
+    assert "press Enter" in joined or "skip the key" in joined
+
+
+SECRET_SHAPED = re.compile(
+    r"\b(?=[A-Za-z0-9]{20,}\b)(?=[A-Za-z0-9]*[a-z])(?=[A-Za-z0-9]*[A-Z])"
+    r"(?=[A-Za-z0-9]*\d)[A-Za-z0-9]+\b"
+)
+"""Twenty or more characters, mixed case, at least one digit, no separators.
+
+That is what an API key looks like and what ordinary prose and identifiers do
+not: `appointment_start_year` has underscores, `OpenAlex` has no digits.
+"""
+
+
+def test_no_secret_shaped_string_is_committed_in_the_notebook():
+    found = SECRET_SHAPED.search(notebook_source())
+    assert not found, f"something key-shaped is committed: {found and found.group(0)[:6]}..."
+
+
+def test_the_secret_scanner_would_actually_catch_a_key():
+    """A guard nobody has seen fire is a guard nobody should trust."""
+    assert SECRET_SHAPED.search("key = Xk3Qz9Rb2Tn7Vw4Ly8Ms1")  # invented, not a real key
+    assert not SECRET_SHAPED.search("appointment_start_year = 2019")
+    assert not SECRET_SHAPED.search("openalex.org/settings/api")
