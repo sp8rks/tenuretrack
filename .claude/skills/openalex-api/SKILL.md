@@ -10,8 +10,11 @@ Base URL: `https://api.openalex.org`. Docs: https://docs.openalex.org. Everythin
 ## Politeness and quota
 
 - Always append `mailto=<OPENALEX_MAILTO>` to every request. This puts you in the polite pool (faster, more reliable). Read it from the environment; never hardcode.
-- Limits: 100,000 requests per day and 10 per second per mailto/IP. Shared-IP runners (GitHub Actions) get a far lower effective daily budget because the IP is shared. Prefer running large pulls locally.
-- On 429, read `Retry-After`. If it exceeds 60 s, do not sleep; raise `QuotaExhausted` with the reset time. The caller writes partial results and exits nonzero. A daily quota resets at midnight UTC.
+- Limits are a **daily spending budget**, not a request count, and this changed: the old 100,000/day figure is gone. Every call costs about $0.0001. A caller with only a `mailto` gets roughly **1,000 requests a day**; a free account key gets **10x** that. Measured against the live API in August 2026 (`x-ratelimit-limit: 1000`, `x-ratelimit-remaining`, and a 429 body reading "Insufficient budget ... Resets at midnight UTC").
+- Get a free key at openalex.org/settings/api (an account takes about 30 seconds) and set `OPENALEX_API_KEY`. Send it as an `Authorization: Bearer` header, not a query parameter, so it stays out of cache keys and logs.
+- The budget resets at midnight UTC. Read `x-ratelimit-remaining` from responses and report it: a stage that stops early is usually the budget, not a bug.
+- One cohort build can spend the keyless budget on its own, so size stages against 1,000 requests unless a key is set. Prefer running large pulls locally.
+- On 429 the body names the budget. Read `Retry-After`. If it exceeds 60 s, do not sleep; raise `QuotaExhausted` with the reset time. The caller writes partial results and exits nonzero. A daily quota resets at midnight UTC.
 - Retry 5xx with exponential backoff, max 5 tries.
 
 ## Caching
@@ -62,4 +65,4 @@ Resolve a ROR from a name with `/institutions?search=University of Utah` and con
 
 ## Sizing a pull
 
-A subfield pull is typically: 1 subject author + 1 subject works page, then 3,000 to 15,000 candidate authors (15 to 75 pages), then one works query per surviving candidate (a few hundred to a few thousand requests), then one source lookup per distinct venue (a few hundred). Budget 2,000 to 10,000 requests per subject. Print the running request count.
+A subfield pull is typically: 1 subject author + 1 subject works page, then 3,000 to 15,000 candidate authors (15 to 75 pages), then one works query per surviving candidate (a few hundred to a few thousand requests), then one source lookup per distinct venue (a few hundred). Budget 2,000 to 10,000 requests per subject, which needs an API key: it is several days of the keyless allowance. Measured on one real subject: 414 requests for an 82,601-person pool, and roughly 1,250 more to estimate career starts for 4,142 of them. Print the running request count.

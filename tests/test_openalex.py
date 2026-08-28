@@ -381,3 +381,90 @@ def test_paginate_refuses_to_loop_on_a_repeated_cursor(tmp_path):
     client, _ = make_client(tmp_path, pages)
     with pytest.raises(OpenAlexError, match="repeated cursor"):
         list(client.paginate("/authors"))
+
+
+# ------------------------------------------------------- api key and budget
+
+
+def test_no_api_key_is_a_normal_state():
+    from tenuretrack.openalex import api_key_from_env
+
+    assert api_key_from_env({}) is None
+    assert api_key_from_env({"OPENALEX_API_KEY": "   "}) is None
+
+
+def test_an_api_key_is_read_from_the_environment():
+    from tenuretrack.openalex import api_key_from_env
+
+    assert api_key_from_env({"OPENALEX_API_KEY": " abc123 "}) == "abc123"
+
+
+def test_the_key_travels_as_a_header_not_in_the_url(tmp_path):
+    client, recorder = make_client(tmp_path, [ok({"id": "x"})], api_key="secret-key")
+    client.get("/works", {"filter": "type:article"})
+    request = recorder.requests[0]
+    assert request.headers["Authorization"] == "Bearer secret-key"
+    assert "secret-key" not in str(request.url)
+
+
+def test_the_key_never_reaches_the_cache_on_disk(tmp_path):
+    client, _ = make_client(tmp_path, [ok({"id": "x"})], api_key="secret-key")
+    client.get("/works", {"filter": "type:article"})
+    written = "".join(
+        path.read_text(encoding="utf-8") for path in (tmp_path / ".cache").iterdir()
+    )
+    assert "secret-key" not in written
+
+
+def test_two_callers_with_different_keys_share_the_cache(tmp_path):
+    """The key is who is asking, not what is being asked."""
+    first, _ = make_client(tmp_path, [ok({"id": "x"})], api_key="key-one")
+    first.get("/works", {"filter": "type:article"})
+    second, _ = make_client(tmp_path, [], api_key="key-two")
+    assert second.get("/works", {"filter": "type:article"}) == {"id": "x"}
+    assert second.request_count == 0
+
+
+def test_the_budget_the_server_reports_is_remembered(tmp_path):
+    response = httpx.Response(
+        200,
+        json={"id": "x"},
+        headers={"x-ratelimit-limit": "1000", "x-ratelimit-remaining": "417"},
+    )
+    client, _ = make_client(tmp_path, [response])
+    client.get("/works", {"filter": "type:article"})
+    assert client.budget_limit == 1000
+    assert client.budget_remaining == 417
+
+
+def test_a_cache_hit_does_not_touch_the_budget(tmp_path):
+    response = httpx.Response(
+        200, json={"id": "x"}, headers={"x-ratelimit-remaining": "417"}
+    )
+    client, _ = make_client(tmp_path, [response])
+    client.get("/works", {"filter": "type:article"})
+    client.get("/works", {"filter": "type:article"})
+    assert client.cache_hits == 1
+    assert client.budget_remaining == 417
+
+
+def test_running_out_without_a_key_says_how_to_fix_it(tmp_path):
+    spent = httpx.Response(
+        429, json={"error": "no"}, headers={"Retry-After": "15840", "x-ratelimit-limit": "1000"}
+    )
+    client, _ = make_client(tmp_path, [spent])
+    with pytest.raises(QuotaExhausted) as caught:
+        client.get("/works", {"filter": "type:article"})
+    message = str(caught.value)
+    assert "OPENALEX_API_KEY" in message
+    assert "openalex.org/settings/api" in message
+    assert "budget was 1000 requests" in message
+    assert "rerunning repeats no requests" in message
+
+
+def test_running_out_with_a_key_does_not_tell_you_to_get_one(tmp_path):
+    spent = httpx.Response(429, json={"error": "no"}, headers={"Retry-After": "15840"})
+    client, _ = make_client(tmp_path, [spent], api_key="already-have-one")
+    with pytest.raises(QuotaExhausted) as caught:
+        client.get("/works", {"filter": "type:article"})
+    assert "OPENALEX_API_KEY" not in str(caught.value)

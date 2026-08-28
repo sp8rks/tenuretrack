@@ -23,7 +23,12 @@ import yaml
 
 from tenuretrack.config import Config, ConfigError, Topic, load_config
 from tenuretrack.guardrail import assert_directory_aggregates_only
-from tenuretrack.openalex import MAILTO_ENV_VAR, mailto_from_env
+from tenuretrack.openalex import (
+    API_KEY_ENV_VAR,
+    FREE_KEYLESS_BUDGET,
+    MAILTO_ENV_VAR,
+    mailto_from_env,
+)
 
 __all__ = [
     "NotebookError",
@@ -33,6 +38,7 @@ __all__ = [
     "numbered_topics",
     "parse_selection",
     "run_cli",
+    "set_api_key",
     "set_mailto",
     "zip_results",
 ]
@@ -100,6 +106,27 @@ def set_mailto(address: str, env: MutableMapping[str, str] | None = None) -> str
     env = os.environ if env is None else env
     env[MAILTO_ENV_VAR] = (address or "").strip()
     return mailto_from_env(env)
+
+
+def set_api_key(key: str, env: MutableMapping[str, str] | None = None) -> str:
+    """Put an optional OpenAlex API key in the environment, and say what it buys.
+
+    Returns a line the notebook prints, because a blank key is a legitimate
+    choice with a consequence the person should see before starting a long run,
+    not an error.
+    """
+    env = os.environ if env is None else env
+    key = (key or "").strip()
+    if not key:
+        env.pop(API_KEY_ENV_VAR, None)
+        return (
+            "No OpenAlex key, so the daily allowance is about "
+            f"{FREE_KEYLESS_BUDGET} requests. The run will most likely stop "
+            "partway and need continuing tomorrow. A free key at "
+            "openalex.org/settings/api raises the allowance tenfold."
+        )
+    env[API_KEY_ENV_VAR] = key
+    return "OpenAlex key set, so the daily allowance is ten times the default."
 
 
 def describe_config(path: str | Path) -> str:

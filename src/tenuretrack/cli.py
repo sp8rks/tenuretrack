@@ -71,6 +71,19 @@ DATA_OPTION = typer.Option(
 )
 
 
+def _budget_line(client: OpenAlexClient) -> str:
+    """What the day's OpenAlex budget has left, when the server said so.
+
+    OpenAlex bills per call against a daily budget that resets at midnight UTC,
+    so a run that stops early is usually the budget, not a bug.
+    """
+    remaining = client.budget_remaining
+    if remaining is None:
+        return ""
+    limit = f" of {client.budget_limit}" if client.budget_limit else ""
+    return f"; daily budget left: {remaining}{limit}"
+
+
 def _echo_err(message: str) -> None:
     typer.echo(message, err=True)
 
@@ -158,12 +171,13 @@ def init(
             _echo_err(f"OpenAlex request failed: {exc}")
             raise typer.Exit(code=EXIT_NETWORK) from exc
         requests, hits = client.request_count, client.cache_hits
+        budget = _budget_line(client)
 
     _write_config(config_path, result.config)
     typer.echo(format_result(result))
     typer.echo("")
     typer.echo(f"Wrote {config_path}. Check the topics, then run `tenuretrack run`.")
-    typer.echo(f"OpenAlex requests: {requests} (served from cache: {hits})")
+    typer.echo(f"OpenAlex requests: {requests} (served from cache: {hits}){budget}")
 
 
 def _write_config(path: Path, config: dict) -> None:
@@ -230,10 +244,11 @@ def run(
             _echo_err(f"OpenAlex request failed: {exc}")
             raise typer.Exit(code=EXIT_NETWORK) from exc
         requests, hits = client.request_count, client.cache_hits
+        budget = _budget_line(client)
 
     result.funnel.write_csv(result.funnel_path)
     _echo_funnel(result.funnel)
-    typer.echo(f"OpenAlex requests: {requests} (served from cache: {hits})")
+    typer.echo(f"OpenAlex requests: {requests} (served from cache: {hits}){budget}")
     typer.echo(f"{len(members)} people placed on the tenure clock.")
     _not_implemented("the metrics and the report", "tasks 5 and 6")
 

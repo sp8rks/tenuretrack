@@ -36,6 +36,7 @@ __all__ = [
     "OpenAlexError",
     "OpenAlexHTTPError",
     "QuotaExhausted",
+    "api_key_from_env",
     "mailto_from_env",
 ]
 
@@ -49,6 +50,16 @@ MAX_RETRY_SLEEP = 60.0
 """Never sleep longer than this inside a retry. Anything longer is quota."""
 
 MAILTO_ENV_VAR = "OPENALEX_MAILTO"
+API_KEY_ENV_VAR = "OPENALEX_API_KEY"
+
+FREE_KEYLESS_BUDGET = 1000
+"""Requests a day without a key, measured against the live API in August 2026.
+
+OpenAlex moved to a spending budget: every call costs about $0.0001, a caller
+with only a `mailto` gets $0.10 a day, and a free account key gets ten times
+that. The daily budget resets at midnight UTC. This constant is documentation,
+not a limit the client enforces; the server is the authority.
+"""
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
@@ -83,19 +94,35 @@ class QuotaExhausted(OpenAlexError):
         url: str,
         retry_after: float | None = None,
         reset_at: _dt.datetime | None = None,
+        *,
+        has_api_key: bool = True,
+        budget_limit: int | None = None,
     ) -> None:
         self.url = url
         self.retry_after = retry_after
         self.reset_at = reset_at
-        parts = [f"OpenAlex quota exhausted on {url}"]
+        self.has_api_key = has_api_key
+        self.budget_limit = budget_limit
+        parts = [f"OpenAlex daily budget spent on {url}"]
+        if budget_limit is not None:
+            parts.append(f"the budget was {budget_limit} requests")
         if retry_after is not None:
             parts.append(f"the server asked for {retry_after:.0f} s")
         if reset_at is not None:
-            parts.append(f"quota resets at {reset_at.isoformat(timespec='seconds')}")
+            parts.append(f"it resets at {reset_at.isoformat(timespec='seconds')}")
         parts.append(
             "everything fetched so far is cached, so rerunning repeats no requests"
         )
-        super().__init__("; ".join(parts))
+        message = "; ".join(parts)
+        if not has_api_key:
+            message += (
+                f"\n\nWithout an API key the budget is about {FREE_KEYLESS_BUDGET} "
+                "requests a day, which one cohort build can spend. A free account "
+                "key raises it tenfold: make an account at openalex.org, copy the "
+                "key from openalex.org/settings/api, and set "
+                f"{API_KEY_ENV_VAR}=your-key. It costs nothing."
+            )
+        super().__init__(message)
 
 
 def mailto_from_env(env: Mapping[str, str] | None = None) -> str:
@@ -114,6 +141,19 @@ def mailto_from_env(env: Mapping[str, str] | None = None) -> str:
             f"{MAILTO_ENV_VAR}={value!r} does not look like an email address."
         )
     return value
+
+
+def api_key_from_env(env: Mapping[str, str] | None = None) -> str | None:
+    """Read an optional OpenAlex API key.
+
+    A key is not needed to run, but without one the daily budget is about
+    `FREE_KEYLESS_BUDGET` requests, which a single cohort build can spend. A
+    free account key raises it tenfold. Absent is a normal state, so this
+    returns None rather than raising.
+    """
+    env = os.environ if env is None else env
+    value = (env.get(API_KEY_ENV_VAR) or "").strip()
+    return value or None
 
 
 class OpenAlexClient:
@@ -137,8 +177,10 @@ class OpenAlexClient:
         monotonic: Callable[[], float] = time.monotonic,
         now: Callable[[], _dt.datetime] = lambda: _dt.datetime.now(_dt.UTC),
         user_agent: str = "tenuretrack",
+        api_key: str | None = None,
     ) -> None:
         self.mailto = mailto if mailto is not None else mailto_from_env()
+        self.api_key = api_key if api_key is not None else api_key_from_env()
         self.cache_dir = Path(cache_dir)
         self.base_url = base_url.rstrip("/")
         self.max_tries = max(1, int(max_tries))
@@ -150,11 +192,21 @@ class OpenAlexClient:
         self.request_count = 0
         """Requests that actually went over the wire. Print this while running."""
         self.cache_hits = 0
+        self.budget_limit: int | None = None
+        self.budget_remaining: int | None = None
+        """Daily budget as the server last reported it, or None before any live
+        request. Cache hits never update these, because they cost nothing."""
+
+        headers = {"User-Agent": f"{user_agent} (mailto:{self.mailto})"}
+        if self.api_key:
+            # A header, not a query parameter: it keeps the key out of the cache
+            # key, out of any logged URL, and out of the on-disk cache envelope.
+            headers["Authorization"] = f"Bearer {self.api_key}"
 
         self._client = httpx.Client(
             transport=transport,
             timeout=timeout,
-            headers={"User-Agent": f"{user_agent} (mailto:{self.mailto})"},
+            headers=headers,
             follow_redirects=True,
         )
 
@@ -305,6 +357,7 @@ class OpenAlexClient:
 
             self.request_count += 1
             status = response.status_code
+            self._note_budget(response)
 
             if status == 200:
                 try:
@@ -322,10 +375,10 @@ class OpenAlexClient:
 
             if status == 429:
                 retry_after = _retry_after_seconds(response, self._now())
-                if retry_after is not None and retry_after > MAX_RETRY_SLEEP:
-                    raise QuotaExhausted(url, retry_after, self._reset_at(retry_after))
-                if attempt == self.max_tries:
-                    raise QuotaExhausted(url, retry_after, self._reset_at(retry_after))
+                if (
+                    retry_after is not None and retry_after > MAX_RETRY_SLEEP
+                ) or attempt == self.max_tries:
+                    raise self._quota_exhausted(url, retry_after)
                 delay = retry_after if retry_after is not None else _backoff(attempt)
                 self._sleep(min(delay, MAX_RETRY_SLEEP))
                 continue
@@ -341,10 +394,36 @@ class OpenAlexClient:
 
         raise OpenAlexError(f"exhausted retries for {url}: {last_error}")
 
+    def _note_budget(self, response: httpx.Response) -> None:
+        """Remember the daily budget the server just reported."""
+        self.budget_limit = _header_int(response, "x-ratelimit-limit", self.budget_limit)
+        self.budget_remaining = _header_int(
+            response, "x-ratelimit-remaining", self.budget_remaining
+        )
+
+    def _quota_exhausted(self, url: str, retry_after: float | None) -> QuotaExhausted:
+        return QuotaExhausted(
+            url,
+            retry_after,
+            self._reset_at(retry_after),
+            has_api_key=bool(self.api_key),
+            budget_limit=self.budget_limit,
+        )
+
     def _reset_at(self, retry_after: float | None) -> _dt.datetime | None:
         if retry_after is None:
             return None
         return self._now() + _dt.timedelta(seconds=retry_after)
+
+
+def _header_int(response: httpx.Response, name: str, fallback: int | None) -> int | None:
+    raw = response.headers.get(name)
+    if raw is None:
+        return fallback
+    try:
+        return int(float(raw.strip()))
+    except ValueError:
+        return fallback
 
 
 def _backoff(attempt: int) -> float:

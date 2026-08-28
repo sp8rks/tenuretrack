@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import zipfile
 from pathlib import Path
 
@@ -272,3 +273,41 @@ def test_run_cli_reports_a_missing_executable():
             run_cli("--version")
     finally:
         notebook.subprocess.Popen = original
+
+
+# ------------------------------------------------------------- the api key
+
+
+def test_a_key_goes_into_the_environment():
+    from tenuretrack.notebook import set_api_key
+    from tenuretrack.openalex import API_KEY_ENV_VAR
+
+    env = {}
+    message = set_api_key("  my-key  ", env)
+    assert env[API_KEY_ENV_VAR] == "my-key"
+    assert "ten times" in message
+
+
+def test_a_blank_key_is_allowed_and_says_what_it_costs():
+    from tenuretrack.notebook import set_api_key
+    from tenuretrack.openalex import API_KEY_ENV_VAR
+
+    env = {API_KEY_ENV_VAR: "stale"}
+    message = set_api_key("", env)
+    assert API_KEY_ENV_VAR not in env
+    assert "stop partway" in message
+    assert "openalex.org/settings/api" in message
+
+
+def test_the_notebook_asks_for_a_key_but_ships_without_one():
+    """The same rule as the email address: a key is a secret, not a default."""
+    import json
+
+    nb = json.loads(NOTEBOOK.read_text(encoding="utf-8"))
+    cells = ["".join(cell["source"]) for cell in nb["cells"]]
+    joined = "\n".join(cells)
+
+    assert 'openalex_api_key = ""' in joined, "the key box must ship empty"
+    assert "openalex.org/settings/api" in joined, "say where to get one"
+    # No long opaque token pasted in by accident.
+    assert not re.search(r"[A-Za-z0-9_-]{32,}", joined)

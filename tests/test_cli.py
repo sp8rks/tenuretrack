@@ -198,6 +198,8 @@ def fake_result(**overrides):
 class FakeClient:
     request_count = 4
     cache_hits = 1
+    budget_remaining = 862
+    budget_limit = 1000
 
     def __enter__(self):
         return self
@@ -255,6 +257,7 @@ def test_init_explains_the_file_it_wrote(monkeypatch, tmp_path):
     assert "T10001" in out
     assert "Check the topics" in out
     assert "OpenAlex requests: 4" in out
+    assert "daily budget left: 862 of 1000" in out
 
 
 def test_init_leaves_a_comment_a_reader_can_act_on(monkeypatch, tmp_path):

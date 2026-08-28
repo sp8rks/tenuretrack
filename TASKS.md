@@ -2,6 +2,18 @@
 
 One task per PR, in order. Each PR must include tests and pass `make test`. Open the PR with a summary of what was built, what needs the maintainer's input, and (for network tasks) how many OpenAlex requests the live run made.
 
+## OpenAlex budget, measured 2026-08-28
+
+OpenAlex bills per API call against a daily budget that resets at midnight UTC. The old 100,000 requests/day figure is gone. A caller with only a `mailto` gets about **1,000 requests a day**; a free account key (openalex.org/settings/api, `OPENALEX_API_KEY`) gets **10x** that. Measured costs on one real subject:
+
+| stage | requests |
+|---|---|
+| `init` (resolve, merge profiles, topic reach) | 18 |
+| candidate pool, 82,601 people | 414 |
+| career starts for 4,142 people | ~1,250 (estimated; the live run was cut off) |
+
+A full run does not fit in the keyless budget. Size every new stage against this, and report the request count and the budget left in the PR.
+
 ## Task 1: Scaffold
 - `pyproject.toml` (typer, httpx, pyyaml, pandas, numpy, python-pptx, pytest), `src/tenuretrack/`, `Makefile` (`test`, `lint`, `run`, `chaperone`, `slides`).
 - `config.py`: load and validate `benchmark.yaml` (schema in `benchmark.example.yaml`).
