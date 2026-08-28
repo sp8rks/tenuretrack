@@ -61,9 +61,25 @@ A full run does not fit in the keyless budget. Size every new stage against this
 ## Task 9: Example 1, Taylor Sparks
 - Run the full pipeline on `examples/taylor-sparks/benchmark.yaml`. Commit `results/` and the deck. This subject is past year 6, so the through-year-6 benchmark applies directly and the comparison horizon is year 6.
 
-## Task 10: Example 2, Second Subject (battery materials)
-- Run the full pipeline on `examples/second-subject/benchmark.yaml`. Subject is mid-clock, so the report computes the cohort at her current career year as well as year 6. Commit `results/` and the deck.
+## Task 10: Example 2 (dropped)
 
+A second worked example using a colleague was planned and has been removed. It was
+meant to exercise the mid-clock path: a subject inside year 6 rather than past it,
+whose comparison happens at their own career year.
+
+Dropped because the report states a subject's tenure-clock extension in plain
+words. That is closer to personal circumstance than to publication data, and a
+public repository is not the place for a colleague's, whatever permission was
+given before anyone knew the report would say it.
+
+The paths it covered are covered by tests instead: `comparison_horizon` is
+exercised across career years 1, 4, 6, 11 and 30, a window whose final year is
+still running is flagged and tested, and the stopped-clock arithmetic has its own
+tests. What is lost is a committed live example of the mid-clock case, not the
+behaviour.
+
+Any future second example needs the subject's explicit agreement to what the
+report will say about them, not just to being included.
 ## Task 11: Colab notebook
 
 Built ahead of tasks 2 to 8, on request, because the no-install path is what most

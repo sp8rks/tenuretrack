@@ -38,7 +38,9 @@ This is a clean-room build. Do not reference, fetch, or assume anything from any
 
 ## Examples
 
-`examples/taylor-sparks/` and `examples/second-subject/` each hold a `benchmark.yaml` and are the acceptance tests for the whole pipeline (see TASKS.md, tasks 8 and 9). Their `results/` directories are committed because they contain aggregates only; the guardrail test runs on them.
+`examples/taylor-sparks/` holds a `benchmark.yaml` and is the acceptance test for the whole pipeline (see TASKS.md, task 9). Its `results/` directory is committed because it contains aggregates only; the guardrail test runs on it.
+
+There is one worked example and it is the maintainer's own record. A second example using a colleague was planned and dropped: the report states a subject's tenure-clock extension in plain words, which is closer to personal circumstance than to publication data, and a public repository is not the place for a colleague's. Any future example needs the subject's explicit agreement to what the report will say about them, not just to being included. Prefer no second example over a borrowed one.
 
 ## When in doubt
 

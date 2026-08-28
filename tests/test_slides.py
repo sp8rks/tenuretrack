@@ -81,7 +81,7 @@ def data_for(tmp_path, config_dict, **kwargs):
     [
         ("Taylor D. Sparks", "taylor-d-sparks"),
         ("Jane Doe", "jane-doe"),
-        ("Subject, Second", "ji-second"),
+        ("Doe, Jane", "doe-jane"),
         ("", "subject"),
         ("...", "subject"),
     ],

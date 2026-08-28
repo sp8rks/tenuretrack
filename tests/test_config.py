@@ -165,12 +165,11 @@ def test_load_config_records_its_source(tmp_path, config_dict):
     [
         REPO_ROOT / "benchmark.example.yaml",
         REPO_ROOT / "examples" / "taylor-sparks" / "benchmark.yaml",
-        REPO_ROOT / "examples" / "second-subject" / "benchmark.yaml",
     ],
-    ids=["example-template", "taylor-sparks", "second-subject"],
+    ids=["example-template", "taylor-sparks"],
 )
 def test_shipped_configs_load(path):
-    """The template and both acceptance examples must always parse."""
+    """The template and the acceptance example must always parse."""
     config = load_config(path)
     assert config.subject.institution_ror.startswith("https://ror.org/")
     assert config.cohort.min_cell_size >= 5
