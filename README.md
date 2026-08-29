@@ -25,11 +25,20 @@ start year, and your email, and run the cells from the top. It installs the tool
 on a temporary Google machine, builds your cohort, shows the report, and hands
 you a zip. See [notebooks/](notebooks/).
 
+**Get a free OpenAlex API key first**, at
+[openalex.org/settings/api](https://openalex.org/settings/api). It takes about
+thirty seconds, costs nothing, and needs no payment details. Without one you get
+roughly 1,000 requests a day and a cohort build spends a few thousand, so the
+run stops each day and resumes the next: two or three days instead of forty
+minutes. The tool works either way, and the key is the single thing that most
+changes how this feels to use.
+
 ## Quick start, on your own machine
 
 ```bash
 pip install git+https://github.com/sp8rks/tenuretrack.git
 export OPENALEX_MAILTO=you@university.edu   # required, keeps you in the OpenAlex polite pool
+export OPENALEX_API_KEY=your-free-key       # openalex.org/settings/api, 10x the daily allowance
 
 tenuretrack init --orcid 0000-0000-0000-0000 --institution "University of X" --start 2021
 # suggests subfield topics from your own papers, writes benchmark.yaml for you to edit
@@ -38,7 +47,7 @@ tenuretrack run
 # builds the cohort, computes norms, writes results/
 ```
 
-Everything is cached locally so reruns are free. A first run pulls a few thousand author records and takes 10 to 40 minutes depending on the size of your field.
+Everything is cached locally so reruns are free. A first run pulls a few thousand author records and takes 10 to 40 minutes depending on the size of your field, with a key. Without one it spends the day's allowance, stops, and resumes on the next run, so allow two or three days.
 
 ## How the cohort is built
 
