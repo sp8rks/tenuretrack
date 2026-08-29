@@ -5,9 +5,12 @@ subject:
   name: "Jane Doe"                      # appears in the subject's own report only
   orcid: "0000-0000-0000-0000"
   openalex_author_ids: []               # filled by init; extra IDs if the profile is split
-  institution_ror: "https://ror.org/00000000"
+  institution_ror: "https://ror.org/000000000"
   institution_name: "University of X"
   start_year: 2021                      # first year of the tenure-line appointment
+  clock_extension_years: 0              # years the clock was stopped (parental or medical
+                                        # leave, pandemic extension). Moves the comparison
+                                        # back that many years and keeps all the papers.
   clock_notes: ""                       # e.g. "converted from lecturer line in 2020"
 
 subfield:
@@ -24,11 +27,16 @@ cohort:
   horizon_years: 6                      # the destination benchmark
   countries: ["US"]
   institution_types: ["education"]
-  core_topic_share_min: 0.25
+  core_topic_share_min: 0.4       # the main lever on cohort size; see docs/methods.md
   min_led_papers: 3
   min_cell_size: 5
   bootstrap_iterations: 2000
   article_types: ["article"]           # applied symmetrically to subject and cohort
+  excluded_venues: []                  # venue names or OpenAlex source IDs to leave out.
+                                       # Some conference abstract series carry an ISSN and
+                                       # are typed as journals, so nothing in the data
+                                       # distinguishes them. Applied to subject and cohort
+                                       # alike, or to neither.
 
 output:
   dir: results

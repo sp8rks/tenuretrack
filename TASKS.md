@@ -2,6 +2,18 @@
 
 One task per PR, in order. Each PR must include tests and pass `make test`. Open the PR with a summary of what was built, what needs the maintainer's input, and (for network tasks) how many OpenAlex requests the live run made.
 
+## OpenAlex budget, measured 2026-08-28
+
+OpenAlex bills per API call against a daily budget that resets at midnight UTC. The old 100,000 requests/day figure is gone. A caller with only a `mailto` gets about **1,000 requests a day**; a free account key (openalex.org/settings/api, `OPENALEX_API_KEY`) gets **10x** that. Measured costs on one real subject:
+
+| stage | requests |
+|---|---|
+| `init` (resolve, merge profiles, topic reach) | 18 |
+| candidate pool, 82,601 people | 414 |
+| career starts for 4,142 people | ~1,250 (estimated; the live run was cut off) |
+
+A full run does not fit in the keyless budget. Size every new stage against this, and report the request count and the budget left in the PR.
+
 ## Task 1: Scaffold
 - `pyproject.toml` (typer, httpx, pyyaml, pandas, numpy, python-pptx, pytest), `src/tenuretrack/`, `Makefile` (`test`, `lint`, `run`, `chaperone`, `slides`).
 - `config.py`: load and validate `benchmark.yaml` (schema in `benchmark.example.yaml`).
@@ -49,8 +61,42 @@ One task per PR, in order. Each PR must include tests and pass `make test`. Open
 ## Task 9: Example 1, Taylor Sparks
 - Run the full pipeline on `examples/taylor-sparks/benchmark.yaml`. Commit `results/` and the deck. This subject is past year 6, so the through-year-6 benchmark applies directly and the comparison horizon is year 6.
 
-## Task 10: Example 2, Second Subject (battery materials)
-- Run the full pipeline on `examples/second-subject/benchmark.yaml`. Subject is mid-clock, so the report computes the cohort at her current career year as well as year 6. Commit `results/` and the deck.
+## Task 10: Example 2 (dropped)
 
-## Task 11: Docs and release
+A second worked example using a colleague was planned and has been removed. It was
+meant to exercise the mid-clock path: a subject inside year 6 rather than past it,
+whose comparison happens at their own career year.
+
+Dropped because the report states a subject's tenure-clock extension in plain
+words. That is closer to personal circumstance than to publication data, and a
+public repository is not the place for a colleague's, whatever permission was
+given before anyone knew the report would say it.
+
+The paths it covered are covered by tests instead: `comparison_horizon` is
+exercised across career years 1, 4, 6, 11 and 30, a window whose final year is
+still running is flagged and tested, and the stopped-clock arithmetic has its own
+tests. What is lost is a committed live example of the mid-clock case, not the
+behaviour.
+
+Any future second example needs the subject's explicit agreement to what the
+report will say about them, not just to being included.
+## Task 11: Colab notebook
+
+Built ahead of tasks 2 to 8, on request, because the no-install path is what most
+faculty will use and it shapes what `init` and `run` need to print.
+
+- `tenuretrack/notebook.py`: `set_mailto`, `describe_config`, `keep_topics`,
+  `list_results`, `zip_results`. No IPython import, no network, fully tested.
+- `notebooks/tenuretrack_colab.ipynb`: install, optional Drive mount for a
+  resumable cache, `init`, topic review by number, `run`, report display, guarded
+  zip download. Drives the CLI; never forks the pipeline.
+- Tests: committed notebooks carry no saved output, prose stays descriptive, no
+  email address is hardcoded, `zip_results` refuses to bundle a guardrail failure.
+- Task 2 replaced the `!tenuretrack ...` shell escapes with `notebook.run_cli`,
+  which streams output into the cell and raises on a nonzero exit. A stage that
+  fails now stops in its own cell instead of two cells later.
+- Remaining: re-run the notebook end to end after task 8 and update the wording
+  where `run` prints something the cells should explain.
+
+## Task 12: Docs and release
 - Finish `docs/methods.md` from the implemented code, `docs/beyond-papers.md`, `CITATION.cff`, README quick start verified end to end on a fresh clone, tag `v0.1.0`.

@@ -1,0 +1,7 @@
+step,label,rule,kept,dropped
+1,candidates,"topics T11948|T10440|T10657|T10018|T10311|T10059, at least 10 works, an affiliation in US, not the subject themselves",82600,0
+2,core topic share,share of work in the subfield at least 0.4,4830,77770
+3,university,an affiliation of type education,4737,93
+4,plausible years,byline years could contain a start between 2008 and 2018,4141,596
+5,career start estimated,"a confident first independent start (at least 2 led papers at one institution, with earlier trainee years elsewhere)",2015,2126
+6,start in window,estimated start between 2008 and 2018,1091,924

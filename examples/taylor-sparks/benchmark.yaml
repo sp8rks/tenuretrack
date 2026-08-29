@@ -1,33 +1,57 @@
-# Example 1: the maintainer's own record. Past year 6, so the through-year-6
-# benchmark applies directly. Run `tenuretrack init` to fill the ORCID-derived
-# fields and confirm the topic set before `run`.
-
+# Example 1: the maintainer's own record, run end to end.
+#
+# Past career year 6, so the through-year-6 benchmark applies directly and the
+# comparison horizon is year 6. Everything below except clock_notes was written
+# by `tenuretrack init`; the topic set was left exactly as init proposed it,
+# which is deliberate (see README.md).
 subject:
-  name: "Taylor Sparks"
-  orcid: "FILL_ME"                       # init resolves this; verify it is the right profile
-  openalex_author_ids: []
-  institution_ror: "https://ror.org/03r0ha626"   # University of Utah (verify with init)
-  institution_name: "University of Utah"
+  name: Taylor D. Sparks
+  orcid: 0000-0001-8020-7711
+  openalex_author_ids:
+  - A5003301534
+  - A5125466922
+  - A5128194927
+  - A5128791440
+  - A5130285389
+  - A5136206624
+  - A5136306437
+  institution_ror: https://ror.org/03r0ha626
+  institution_name: University of Utah
   start_year: 2013
-  clock_notes: "Assistant Professor, Materials Science and Engineering, from 2013."
-
+  clock_notes: Assistant Professor, Materials Science and Engineering, from 2013.
+    Past year 6, so the comparison happens at year 6.
 subfield:
-  label: "thermoelectrics and materials informatics"
-  topics: []                             # init proposes these from 2013-2018 Utah bylines; edit before run
+  label: materials chemistry
+  topics:
+  - id: T11948
+    name: Machine Learning in Materials Science
+  - id: T10440
+    name: Advanced Thermoelectric Materials and Devices
+  - id: T10657
+    name: Topological Materials and Phenomena
+  - id: T10018
+    name: Advancements in Battery Materials
+  - id: T10311
+    name: Advancements in Solid Oxide Fuel Cells
+  - id: T10059
+    name: Bone Tissue Engineering Materials
   excluded_topics: []
-
 cohort:
-  start_window: [2008, 2018]
+  start_window:
+  - 2008
+  - 2018
   horizon_years: 6
-  countries: ["US"]
-  institution_types: ["education"]
-  core_topic_share_min: 0.25
+  countries:
+  - US
+  institution_types:
+  - education
+  core_topic_share_min: 0.4
   min_led_papers: 3
   min_cell_size: 5
   bootstrap_iterations: 2000
-  article_types: ["article"]
-
+  article_types:
+  - article
 output:
-  dir: examples/taylor-sparks/results
+  dir: results
   slides: true
   chaperone: true
