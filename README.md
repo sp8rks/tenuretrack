@@ -28,7 +28,7 @@ you a zip. See [notebooks/](notebooks/).
 ## Quick start, on your own machine
 
 ```bash
-pip install tenuretrack
+pip install git+https://github.com/sp8rks/tenuretrack.git
 export OPENALEX_MAILTO=you@university.edu   # required, keeps you in the OpenAlex polite pool
 
 tenuretrack init --orcid 0000-0000-0000-0000 --institution "University of X" --start 2021
@@ -43,7 +43,7 @@ Everything is cached locally so reruns are free. A first run pulls a few thousan
 ## How the cohort is built
 
 1. **Topics.** Four or five OpenAlex topics define the subfield. The tool proposes them from your own recent papers; you confirm or edit them. This is the single most important choice you make, and the report shows you the top venues and institutions so you can sanity-check it.
-2. **Candidates.** All authors with substantial work in those topics, filtered to US academia (configurable), with a core-topic share of at least 25%.
+2. **Candidates.** All authors with substantial work in those topics, filtered to US academia (configurable), with a core-topic share of at least 40%.
 3. **Tenure-track-shaped start.** People whose publication record shows a fresh independent start (first affiliation-anchored, lead-author papers) in the cohort window, by default 2008 to 2018 so that everyone has completed at least six years.
 4. **PI-like headline cohort.** High-confidence matches only. Ambiguous names and people with split OpenAlex profiles are dropped rather than guessed at.
 5. **Metrics through year N** for each cohort member, then quartiles with cluster-bootstrap confidence intervals.
@@ -71,7 +71,7 @@ The full filtering rules are in [docs/methods.md](docs/methods.md).
 
 ## Building or contributing
 
-This repo is built with Claude Code. Start with `CLAUDE.md`, then `TASKS.md` (one task per PR), and the skills in `.claude/skills/`. Two worked examples live in `examples/`.
+This repo is built with Claude Code. Start with `CLAUDE.md`, then `TASKS.md` (one task per PR), and the skills in `.claude/skills/`. One worked example lives in `examples/`.
 
 ## Citing
 
