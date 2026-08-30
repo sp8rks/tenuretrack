@@ -14,6 +14,77 @@ from tenuretrack.openalex import MAILTO_ENV_VAR
 
 runner = CliRunner()
 
+
+def test_the_command_line_starts_without_python_pptx(tmp_path):
+    """A Colab machine installed with `pip --no-deps` has no python-pptx.
+
+    It used to take the whole CLI down: `cli` imported `pdf_report`, which
+    imported `slides`, which imports pptx at the top for its own constants. So
+    `run`, the stage that costs hours and is the reason the tool exists, died
+    on an import line for the sake of a deck it never builds. The numbers now
+    live in `slide_data`, which pptx never touches.
+    """
+    import os
+    import subprocess
+    import sys
+    import textwrap
+
+    script = textwrap.dedent(
+        """
+        import builtins
+        real = builtins.__import__
+
+        def blocked(name, *args, **kwargs):
+            if name == "pptx" or name.startswith("pptx."):
+                raise ModuleNotFoundError("No module named 'pptx'")
+            return real(name, *args, **kwargs)
+
+        builtins.__import__ = blocked
+        import tenuretrack.cli
+        from tenuretrack.slide_data import load_slide_data
+        print("ok")
+        """
+    )
+    env = {**os.environ, "PYTHONPATH": os.pathsep.join(sys.path)}
+    done = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+        env=env,
+    )
+    assert done.returncode == 0, done.stderr
+    assert "ok" in done.stdout
+
+
+def test_slides_says_what_to_install_when_pptx_is_missing(tmp_path, config_dict, monkeypatch):
+    """The one command that does need pptx explains itself instead of tracing back."""
+    import builtins
+
+    path = write_config(tmp_path, config_dict)
+    results = tmp_path / "results"
+    results.mkdir()
+    (results / "subject.csv").write_text(
+        """metric,career_year,compared_at
+pubs,6,6
+""",
+        encoding="utf-8",
+    )
+
+    real = builtins.__import__
+
+    def blocked(name, *args, **kwargs):
+        if name == "tenuretrack.slides":
+            raise ImportError("No module named 'pptx'")
+        return real(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", blocked)
+    result = runner.invoke(
+        app, ["slides", "--config", str(path), "--results-dir", str(results)]
+    )
+    assert result.exit_code == EXIT_BAD_CONFIG
+    assert "pip install python-pptx" in text(result)
+
 SUBCOMMANDS = ("init", "run", "chaperone", "slides", "show-cohort")
 
 
