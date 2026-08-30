@@ -14,7 +14,7 @@ import typer
 import yaml
 
 from tenuretrack import __version__
-from tenuretrack.career import build_starts, candidates_worth_asking
+from tenuretrack.career import StaleStarts, build_starts, candidates_worth_asking
 from tenuretrack.chaperone import build_chaperone
 from tenuretrack.config import Config, ConfigError, load_config
 from tenuretrack.metrics import build_benchmarks
@@ -29,7 +29,7 @@ from tenuretrack.openalex import (
 from tenuretrack.pdf_report import build_pdf_report
 from tenuretrack.pool import build_pool
 from tenuretrack.report import build_report
-from tenuretrack.slides import build_slides, export_pdf, load_slide_data
+from tenuretrack.slide_data import load_slide_data
 from tenuretrack.subject import InitError, format_result, initialize
 
 app = typer.Typer(
@@ -227,7 +227,13 @@ def run(
     cache_dir: Path = CACHE_OPTION,
     data_dir: Path = DATA_OPTION,
     refresh: bool = typer.Option(
-        False, "--refresh", help="Gather the candidate pool again from scratch."
+        False,
+        "--refresh",
+        help=(
+            "Gather the candidate pool and estimate every career start again "
+            "from scratch. Cached OpenAlex responses are still used, so only "
+            "requests the new settings actually change are made again."
+        ),
     ),
 ) -> None:
     """Build the cohort, compute the norms, and write the report."""
@@ -284,6 +290,11 @@ def run(
                 this_year=_dt.date.today().year,
                 on_progress=typer.echo,
             )
+        except StaleStarts as exc:
+            # Not a network failure: the files on disk are fine, they just
+            # answer a different question than the config now asks.
+            _echo_err(str(exc))
+            raise typer.Exit(code=EXIT_BAD_CONFIG) from exc
         except QuotaExhausted as exc:
             # Everything fetched is cached and the funnel so far is on disk, so
             # the rerun picks up here rather than starting over.
@@ -352,6 +363,20 @@ def slides(
             "Run `tenuretrack run` first."
         )
         raise typer.Exit(code=EXIT_BAD_CONFIG)
+
+    # Imported here, not at the top of the module, because python-pptx is
+    # needed by this command alone. A Colab machine that does not have it
+    # should still be able to `run`, which is the stage that costs hours.
+    try:
+        from tenuretrack.slides import build_slides, export_pdf
+    except ImportError as exc:
+        _echo_err(
+            f"the deck needs python-pptx, which is not installed here ({exc}). "
+            "Install it with `pip install python-pptx` and run this again. "
+            "Nothing else needs it: report.md, report.pdf and the CSVs in "
+            f"{results} are already written."
+        )
+        raise typer.Exit(code=EXIT_BAD_CONFIG) from exc
 
     deck = build_slides(data, results, on_progress=typer.echo)
     build_pdf_report(results, config, on_progress=typer.echo)

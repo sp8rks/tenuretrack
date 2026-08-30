@@ -61,7 +61,7 @@ Someone one or two years into the clock may have almost nothing published under 
 | Plausible years | Byline years could contain a start inside the window | |
 | Most on topic | The candidates with the largest core-topic share, capped | 2,000 |
 | Career start | A confident first independent start could be estimated | |
-| Start in window | That estimate falls inside the cohort window | 2008 to 2018 |
+| Start in window | That estimate falls inside the cohort window | subject's start year plus or minus 10, capped |
 | PI-like | At least 3 led journal articles in the window, activity in at least 2 distinct window years | |
 | Identity | Profile does not look merged or fragmented | |
 
@@ -113,7 +113,15 @@ A postdoc who published two led papers before starting their faculty job at the 
 
 Estimating a start needs the person's papers, which is the most expensive stage in the pipeline. Works are requested fifty authors at a time, so the request count tracks the number of pages the results fill rather than the number of people. Before any request, candidates whose byline years could not contain a start inside the window are dropped: that pre-filter only removes people whose rule-2 estimate could not land in the window anyway, so it saves requests without changing who ends up in the cohort.
 
-The cohort window (2008 to 2018) guarantees every member has completed at least six career years by the time of analysis.
+### 5.5 The cohort window
+
+The window is the range of estimated start years a cohort member may fall in, and it is anchored on the subject rather than on fixed calendar years. Publishing norms move. Output rates, the number of authors on a paper, which venues exist and what counts as a normal amount of collaboration are not the same in 2005 as in 2020, so a cohort drawn a generation away from the subject describes a different job and reads as a difference in the person. The window therefore runs `cohort.start_window_years` years either side of the subject's own start year, 10 by default, which is wide enough to hold a cohort and narrow enough that both ends are recognisably the same era.
+
+The recent end is then capped at the current year minus `horizon_years`. A cohort member has to have finished the horizon year for there to be anything to read at it: someone who started three years ago has no year six, and counting them would put a truncated record into the quartiles. So for a subject who started recently the cap binds and the window sits entirely behind them. That is a limit of the data and not a choice, and `report.md` states the gap in years rather than leaving it implicit, in the same way citations at different horizons are refused rather than quietly compared. The floor is 1950.
+
+`cohort.start_window` overrides all of this with an explicit pair of years, and `init` writes the resolved pair into `benchmark.yaml` so the file records the window the run actually used. A config that pins its window keeps it: the committed worked example still names 2008 to 2018, which is the window its results were really built from.
+
+The window guarantees every member has completed at least `horizon_years` career years by the time of analysis.
 
 ## 6. Metrics
 

@@ -23,7 +23,16 @@ subfield:
   excluded_topics: []                   # topics deliberately left out, with a reason in a comment
 
 cohort:
-  start_window: [2008, 2018]            # cohort members' estimated start years
+  start_window: [2008, 2018]            # cohort members' estimated start years.
+                                        # `init` writes this resolved from your own
+                                        # start year. Delete it and the window is
+                                        # derived instead (see start_window_years).
+  start_window_years: 10                # only used when start_window is absent: the
+                                        # window reaches this many years either side
+                                        # of subject.start_year, so the cohort was
+                                        # publishing under roughly your conventions.
+                                        # Its recent end is held back so everyone in
+                                        # it has finished horizon_years career years.
   horizon_years: 6                      # the destination benchmark
   countries: ["US"]
   institution_types: ["education"]

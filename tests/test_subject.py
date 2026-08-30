@@ -721,6 +721,19 @@ def test_draft_config_matches_the_documented_schema(tmp_path):
     build_config(config)  # raises if a key or a value is wrong
 
 
+def test_draft_config_resolves_the_window_around_the_start_year(tmp_path):
+    """The file records the window the run used, not the rule that made it."""
+    result = result_for(tmp_path)
+    config = draft_config(result, today=_dt.date(2026, 8, 29))
+    assert config["cohort"]["start_window"] == [result.start_year - 10, 2020]
+
+
+def test_the_printout_says_which_years_the_cohort_started_in(tmp_path):
+    text = format_result(result_for(tmp_path))
+    assert "Cohort start window:" in text
+    assert "either side of" in text
+
+
 # -------------------------------------------------- how wide each topic reaches
 
 

@@ -31,7 +31,7 @@ from tenuretrack.guardrail import assert_aggregates_only  # noqa: E402
 from tenuretrack.metrics import BENCHMARKS_CSV  # noqa: E402
 from tenuretrack.pool import FUNNEL_FILENAME  # noqa: E402
 from tenuretrack.report import SUBJECT_CSV, VENUES_CSV  # noqa: E402
-from tenuretrack.slides import SlideData, load_slide_data  # noqa: E402
+from tenuretrack.slide_data import SlideData, load_slide_data  # noqa: E402
 
 __all__ = ["PDF_FILENAME", "build_pdf_report"]
 

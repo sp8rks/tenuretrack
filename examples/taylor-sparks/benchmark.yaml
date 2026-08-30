@@ -37,6 +37,9 @@ subfield:
     name: Bone Tissue Engineering Materials
   excluded_topics: []
 cohort:
+  # Pinned, and older than the default rule would now derive (2003 to 2020, ten
+  # years either side of 2013). The committed results were built from these
+  # years, so they stay until the example is re-run against OpenAlex.
   start_window:
   - 2008
   - 2018

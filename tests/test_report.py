@@ -376,6 +376,22 @@ def test_the_report_explains_the_stopped_clock(tmp_path, config_dict):
     assert "grants time rather than removing the work" in text
 
 
+def test_the_report_states_an_era_gap_it_could_not_close(tmp_path, config_dict):
+    """Nobody who started with the subject has finished the horizon yet."""
+    config_dict["subject"]["start_year"] = 2022
+    config_dict["cohort"]["start_window"] = [2010, 2020]
+    text = written_report(
+        tmp_path, config_dict, horizon=4, career_year=5
+    ).read_text(encoding="utf-8")
+    assert "began at least 2 year(s) before" in text
+    assert "Publishing conventions move" in text
+
+
+def test_a_cohort_overlapping_the_subject_gets_no_era_note(tmp_path, config_dict):
+    text = written_report(tmp_path, config_dict).read_text(encoding="utf-8")
+    assert "Publishing conventions move" not in text
+
+
 def test_a_report_with_no_extension_says_nothing_about_one(tmp_path, config_dict):
     assert "clock was stopped" not in written_report(
         tmp_path, config_dict

@@ -53,8 +53,8 @@ Everything is cached locally so reruns are free. A first run pulls a few thousan
 
 1. **Topics.** Up to three OpenAlex topics define the subfield. The tool proposes them from your own recent papers; you confirm or edit them. This is the single most important choice you make, and the report shows you the top venues and institutions so you can sanity-check it.
 2. **Candidates.** All authors with substantial work in those topics, filtered to US academia (configurable), with a core-topic share of at least 40%.
-3. **The most on-topic 2,000.** The stage that follows asks OpenAlex about each candidate individually, so `max_candidates` caps how many it asks about, keeping those with the largest share of work in your subfield. Same selection as raising the share filter until the count fits, and the funnel reports the share it landed on. Set it to 0 to ask about everyone.
-4. **Tenure-track-shaped start.** People whose publication record shows a fresh independent start (first affiliation-anchored, lead-author papers) in the cohort window, by default 2008 to 2018 so that everyone has completed at least six years.
+3. **Peers, if you want them.** `peer_group_size` narrows the cohort to the institutions closest to yours in subfield output, for a "schools like mine" comparison. Off by default. It costs people fast: a cohort averages under two per institution, so 15 schools leaves a group too thin for quartiles and the run says so.
+4. **Tenure-track-shaped start.** People whose publication record shows a fresh independent start (first affiliation-anchored, lead-author papers) in the cohort window: by default the ten years either side of your own start year, so the cohort was publishing under roughly the conventions you were, with the recent end held back far enough that everyone in it has completed at least six years.
 5. **PI-like headline cohort.** High-confidence matches only. Ambiguous names and people with split OpenAlex profiles are dropped rather than guessed at.
 6. **Metrics through year N** for each cohort member, then quartiles with cluster-bootstrap confidence intervals.
 

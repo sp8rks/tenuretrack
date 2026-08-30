@@ -20,6 +20,8 @@ from tenuretrack.career import (
     LOW,
     NO_RULE,
     STARTS_FILENAME,
+    STARTS_META_FILENAME,
+    StaleStarts,
     StartEstimate,
     build_starts,
     candidates_worth_asking,
@@ -28,6 +30,7 @@ from tenuretrack.career import (
     estimate_starts,
     load_starts,
     plausible_years,
+    read_fingerprint,
     screen_starts,
 )
 from tenuretrack.config import build_config
@@ -429,6 +432,93 @@ def test_a_finished_estimate_file_is_not_rebuilt(tmp_path, config_dict):
 
     estimate_starts(client, [candidate()], build_config(config_dict), dest)
     assert client.request_count == before
+
+
+def test_a_reused_estimate_file_records_what_built_it(tmp_path, config_dict):
+    server = WorksServer({ME: [paper(2013, JOB, "last")]})
+    dest = tmp_path / "data" / STARTS_FILENAME
+    estimate_starts(
+        server.client(tmp_path), [candidate()], build_config(config_dict), dest
+    )
+    saved = read_fingerprint(dest.parent / STARTS_META_FILENAME)
+    assert saved["start_window"] == [2008, 2018]
+    assert saved["people"] == 1
+    # The people are a hash, never a list: this file sits beside a pool that
+    # holds names, and author IDs are one of the things the guardrail keeps out.
+    assert ME not in json.dumps(saved)
+
+
+def test_a_changed_window_refuses_the_saved_estimates(tmp_path, config_dict):
+    """The silent version of this dropped every newly eligible person.
+
+    `screen_starts` skips anyone with no estimate without a word, so a file
+    built for a narrower window answered the wider one with a cohort that was
+    quietly missing its new members.
+    """
+    server = WorksServer({ME: [paper(2013, JOB, "last")]})
+    client = server.client(tmp_path)
+    dest = tmp_path / "data" / STARTS_FILENAME
+    estimate_starts(
+        client, [candidate()], config_for(config_dict, start_window=[2008, 2018]), dest
+    )
+
+    wider = config_for(config_dict, start_window=[2003, 2020])
+    with pytest.raises(StaleStarts) as excinfo:
+        estimate_starts(client, [candidate()], wider, dest)
+    message = str(excinfo.value)
+    assert "2003 to 2020" in message and "2008 to 2018" in message
+    assert "--refresh" in message
+
+
+def test_refresh_rebuilds_the_estimates_under_the_new_window(tmp_path, config_dict):
+    server = WorksServer({ME: [paper(2013, JOB, "last")]})
+    client = server.client(tmp_path)
+    dest = tmp_path / "data" / STARTS_FILENAME
+    estimate_starts(
+        client, [candidate()], config_for(config_dict, start_window=[2008, 2018]), dest
+    )
+    wider = config_for(config_dict, start_window=[2003, 2020])
+    estimate_starts(client, [candidate()], wider, dest, refresh=True)
+    assert read_fingerprint(dest.parent / STARTS_META_FILENAME)["start_window"] == [
+        2003,
+        2020,
+    ]
+
+
+def test_a_changed_screening_refuses_the_saved_estimates(tmp_path, config_dict):
+    """A filter earlier in the funnel changes who was asked about."""
+    server = WorksServer({})
+    client = server.client(tmp_path)
+    dest = tmp_path / "data" / STARTS_FILENAME
+    config = build_config(config_dict)
+    estimate_starts(client, [candidate("A1000001")], config, dest)
+
+    with pytest.raises(StaleStarts, match="2 people"):
+        estimate_starts(
+            client, [candidate("A1000001"), candidate("A1000002")], config, dest
+        )
+
+
+def test_an_estimate_file_from_before_the_check_is_still_reused(tmp_path, config_dict):
+    """Refusing it would charge a full re-estimate to every existing cache."""
+    server = WorksServer({ME: [paper(2013, JOB, "last")]})
+    client = server.client(tmp_path)
+    dest = tmp_path / "data" / STARTS_FILENAME
+    estimate_starts(client, [candidate()], build_config(config_dict), dest)
+    (dest.parent / STARTS_META_FILENAME).unlink()
+    before = client.request_count
+
+    said: list[str] = []
+    estimates = estimate_starts(
+        client,
+        [candidate()],
+        config_for(config_dict, start_window=[2003, 2020]),
+        dest,
+        on_progress=said.append,
+    )
+    assert estimates[ME].year == 2012
+    assert client.request_count == before
+    assert "--refresh" in " ".join(said)
 
 
 def test_people_are_asked_about_fifty_at_a_time(tmp_path, config_dict):
