@@ -30,7 +30,7 @@ from tenuretrack.pdf_report import build_pdf_report
 from tenuretrack.peers import enough_people
 from tenuretrack.pool import build_pool
 from tenuretrack.report import build_report
-from tenuretrack.slides import build_slides, export_pdf, load_slide_data
+from tenuretrack.slide_data import load_slide_data
 from tenuretrack.subject import InitError, format_result, initialize
 
 app = typer.Typer(
@@ -370,6 +370,20 @@ def slides(
             "Run `tenuretrack run` first."
         )
         raise typer.Exit(code=EXIT_BAD_CONFIG)
+
+    # Imported here, not at the top of the module, because python-pptx is
+    # needed by this command alone. A Colab machine that does not have it
+    # should still be able to `run`, which is the stage that costs hours.
+    try:
+        from tenuretrack.slides import build_slides, export_pdf
+    except ImportError as exc:
+        _echo_err(
+            f"the deck needs python-pptx, which is not installed here ({exc}). "
+            "Install it with `pip install python-pptx` and run this again. "
+            "Nothing else needs it: report.md, report.pdf and the CSVs in "
+            f"{results} are already written."
+        )
+        raise typer.Exit(code=EXIT_BAD_CONFIG) from exc
 
     deck = build_slides(data, results, on_progress=typer.echo)
     build_pdf_report(results, config, on_progress=typer.echo)

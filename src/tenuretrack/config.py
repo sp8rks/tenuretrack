@@ -24,6 +24,7 @@ __all__ = [
     "OutputSpec",
     "Topic",
     "load_config",
+    "derive_start_window",
 ]
 
 PLACEHOLDER = "FILL_ME"
@@ -65,6 +66,7 @@ _SUBJECT_KEYS = {
 _SUBFIELD_KEYS = {"label", "topics", "excluded_topics"}
 _COHORT_KEYS = {
     "start_window",
+    "start_window_years",
     "horizon_years",
     "countries",
     "institution_types",
@@ -154,6 +156,15 @@ class CohortSpec:
     """Cohort construction knobs. Defaults match `benchmark.example.yaml`."""
 
     start_window: tuple[int, int] = (2008, 2018)
+    """The estimated first-appointment years a cohort member may fall in.
+
+    Derived from the subject when the config does not pin it. See
+    `derive_start_window`; the fallback pair here is only what an unvalidated
+    `CohortSpec()` carries.
+    """
+    start_window_years: int = 10
+    """How many years either side of the subject's own start year the derived
+    window reaches. Ignored when `start_window` is set explicitly."""
     horizon_years: int = 6
     countries: tuple[str, ...] = ("US",)
     institution_types: tuple[str, ...] = ("education",)
@@ -265,7 +276,7 @@ def build_config(data: Any, source: Path | None = None) -> Config:
 
     subject = _subject(data["subject"], problems)
     subfield = _subfield(data["subfield"], problems)
-    cohort = _cohort(data["cohort"], problems)
+    cohort = _cohort(data["cohort"], subject, problems)
     output = _output(data["output"], problems)
 
     if problems:
@@ -450,14 +461,65 @@ def _topics(value: Any, where: str, problems: list[str]) -> tuple[Topic, ...]:
     return tuple(out)
 
 
-def _cohort(raw: dict, problems: list[str]) -> CohortSpec:
+def derive_start_window(
+    start_year: int, span: int, horizon_years: int, today_year: int
+) -> tuple[int, int]:
+    """The cohort start window for a subject who did not pin one.
+
+    Anchored on the subject rather than on fixed calendar years, because
+    publishing norms move: the rate, the venues and the authorship
+    conventions of a subfield in 2005 are not the ones a person starting in
+    2020 is working under, and a cohort drawn a generation away describes a
+    different job. The window reaches `span` years either side of the
+    subject's own start year.
+
+    The top end is then capped at `today_year - horizon_years`, because a
+    cohort member has to have finished the horizon year for there to be
+    anything to read at it: someone who started three years ago has no year
+    six. For a recently appointed subject the cap bites and the window ends
+    up entirely behind them, which is a limit of the data rather than a
+    choice, and the report says so rather than leaving it implicit.
+    """
+    return (
+        max(MIN_START_YEAR, start_year - span),
+        min(start_year + span, today_year - horizon_years),
+    )
+
+
+def _cohort(raw: dict, subject: Subject, problems: list[str]) -> CohortSpec:
     _check_unknown(raw, _COHORT_KEYS, "cohort", problems)
     defaults = CohortSpec()
     this_year = _dt.date.today().year
 
-    window = raw.get("start_window", list(defaults.start_window))
+    span = _int(
+        raw,
+        "start_window_years",
+        defaults.start_window_years,
+        1,
+        30,
+        "cohort",
+        problems,
+    )
+    horizon = _int(
+        raw, "horizon_years", defaults.horizon_years, 1, 20, "cohort", problems
+    )
+
+    window = raw.get("start_window")
     start_window = defaults.start_window
-    if (
+    if window is None:
+        if subject.start_year:
+            start_window = derive_start_window(
+                subject.start_year, span, horizon, this_year
+            )
+            if start_window[0] > start_window[1]:
+                problems.append(
+                    f"no cohort start window is possible: {span} year(s) either "
+                    f"side of {subject.start_year} leaves nobody who has finished "
+                    f"{horizon} career years by {this_year}. Widen "
+                    "cohort.start_window_years, shorten cohort.horizon_years, or "
+                    "set cohort.start_window explicitly."
+                )
+    elif (
         not isinstance(window, (list, tuple))
         or len(window) != 2
         or not all(isinstance(v, int) and not isinstance(v, bool) for v in window)
@@ -477,9 +539,6 @@ def _cohort(raw: dict, problems: list[str]) -> CohortSpec:
     else:
         start_window = (int(window[0]), int(window[1]))
 
-    horizon = _int(
-        raw, "horizon_years", defaults.horizon_years, 1, 20, "cohort", problems
-    )
     countries = _str_list(raw, "countries", defaults.countries, "cohort", problems)
     for code in countries:
         if not COUNTRY_RE.match(code):
@@ -553,6 +612,7 @@ def _cohort(raw: dict, problems: list[str]) -> CohortSpec:
         horizon_years=horizon,
         countries=tuple(countries),
         institution_types=tuple(inst_types),
+        start_window_years=span,
         core_topic_share_min=core_share,
         min_led_papers=min_led,
         min_cell_size=min_cell,
