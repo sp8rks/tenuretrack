@@ -41,6 +41,15 @@ MIN_CELL_SIZE_FLOOR = 5
 aggregates-only rule in CLAUDE.md."""
 
 MAX_TOPICS = 6
+"""The ceiling for a hand-edited config.
+
+`init` proposes at most `MAX_PROPOSED_TOPICS`, which is lower: a list of three
+is one a person can actually read and judge. This stays at six because a config
+written before that cap, including the committed worked example, is still a
+valid description of a cohort that was really built.
+"""
+
+MAX_PROPOSED_TOPICS = 3
 
 _SECTIONS = ("subject", "subfield", "cohort", "output")
 _SUBJECT_KEYS = {
@@ -63,6 +72,7 @@ _COHORT_KEYS = {
     "excluded_venues",
     "min_led_papers",
     "min_cell_size",
+    "peer_group_size",
     "bootstrap_iterations",
     "article_types",
 }
@@ -150,6 +160,15 @@ class CohortSpec:
     core_topic_share_min: float = 0.4
     min_led_papers: int = 3
     min_cell_size: int = 5
+    peer_group_size: int = 0
+    """Keep only people at the N institutions nearest the subject's in subfield
+    output. 0, the default, keeps every institution.
+
+    Off by default because the whole-subfield cohort is the question most
+    people mean, and because narrowing costs people fast: a cohort averaging
+    under two per institution does not survive being cut to fifteen schools.
+    See `tenuretrack/peers.py`.
+    """
     bootstrap_iterations: int = 2000
     article_types: tuple[str, ...] = ("article",)
     excluded_venues: tuple[str, ...] = ()
@@ -396,7 +415,7 @@ def _subfield(raw: dict, problems: list[str]) -> Subfield:
             )
     if len(topics) > MAX_TOPICS:
         problems.append(
-            f"subfield.topics has {len(topics)} topics; the working range is 4 to "
+            f"subfield.topics has {len(topics)} topics; the working range is 1 to "
             f"{MAX_TOPICS} (a wider set pulls a different community into the cohort)"
         )
     return Subfield(label=label, topics=topics, excluded_topics=excluded)
@@ -516,6 +535,9 @@ def _cohort(raw: dict, problems: list[str]) -> CohortSpec:
             "a cohort member"
         ),
     )
+    peer_size = _int(
+        raw, "peer_group_size", defaults.peer_group_size, 0, 5000, "cohort", problems
+    )
     iterations = _int(
         raw,
         "bootstrap_iterations",
@@ -534,6 +556,7 @@ def _cohort(raw: dict, problems: list[str]) -> CohortSpec:
         core_topic_share_min=core_share,
         min_led_papers=min_led,
         min_cell_size=min_cell,
+        peer_group_size=peer_size,
         bootstrap_iterations=iterations,
         article_types=tuple(article_types),
         excluded_venues=tuple(excluded_venues),

@@ -134,7 +134,7 @@ def test_too_many_topics_is_rejected(config_dict):
     config_dict["subfield"]["topics"] = [
         {"id": f"T1000{n}", "name": f"Topic {n}"} for n in range(7)
     ]
-    assert "working range is 4 to 6" in problems_from(config_dict)
+    assert "working range is 1 to 6" in problems_from(config_dict)
 
 
 def test_boolean_is_not_an_integer_year(config_dict):

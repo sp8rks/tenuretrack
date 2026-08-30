@@ -26,6 +26,7 @@ from tenuretrack.openalex import (
     QuotaExhausted,
     mailto_from_env,
 )
+from tenuretrack.peers import enough_people
 from tenuretrack.pool import build_pool
 from tenuretrack.report import build_report, load_venues
 from tenuretrack.slides import build_slides, export_pdf, load_slide_data
@@ -303,6 +304,10 @@ def run(
     _echo_funnel(result.funnel)
     typer.echo(f"OpenAlex requests: {requests} (served from cache: {hits}){budget}")
     typer.echo(f"{len(members)} people placed on the tenure clock.")
+    if config.cohort.peer_group_size > 0:
+        thin = enough_people(len(members))
+        if thin:
+            _echo_err(thin)
     typer.echo(
         f"Wrote {benchmarks.csv_path.name} and {benchmarks.md_path.name} "
         f"({benchmarks.institutions} institutions in the cohort)."

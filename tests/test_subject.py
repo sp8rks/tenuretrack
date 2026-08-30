@@ -14,7 +14,7 @@ from dataclasses import replace
 import httpx
 import pytest
 
-from tenuretrack.config import MAX_TOPICS, build_config
+from tenuretrack.config import MAX_PROPOSED_TOPICS, MAX_TOPICS, build_config
 from tenuretrack.guardrail import PRESCRIPTIVE_TERMS
 from tenuretrack.openalex import OpenAlexClient
 from tenuretrack.subject import (
@@ -267,7 +267,9 @@ def test_topics_rank_by_how_many_papers_sit_in_them():
     proposals = propose_topics(
         topic_spread({"T10001": 5, "T10002": 4, "T10003": 3, "T10004": 3})
     )
-    assert [p.id for p in proposals] == ["T10001", "T10002", "T10003", "T10004"]
+    # Four topics clear the paper count; the proposal offers the strongest
+    # three, because a list of three is one a person can actually judge.
+    assert [p.id for p in proposals] == ["T10001", "T10002", "T10003"]
     assert proposals[0].papers == 5
 
 
@@ -288,9 +290,16 @@ def test_a_record_too_thin_for_any_rule_still_proposes_something():
     assert [p.id for p in proposals] == ["T10001"]
 
 
-def test_no_more_than_six_topics_are_proposed():
+def test_no_more_than_three_topics_are_proposed():
+    """The cap is on what `init` offers, not on what a config may hold.
+
+    Six was too many to read, and the choice it asks for is the one that most
+    shapes the cohort. A hand-edited config may still carry up to MAX_TOPICS,
+    so that a config written before this cap still describes a real cohort.
+    """
     proposals = propose_topics(topic_spread({f"T1000{i}": 9 - i for i in range(9)}))
-    assert len(proposals) == MAX_TOPICS
+    assert len(proposals) == MAX_PROPOSED_TOPICS
+    assert MAX_PROPOSED_TOPICS < MAX_TOPICS
 
 
 def test_a_proposal_carries_the_venues_that_justify_it():

@@ -402,3 +402,74 @@ def test_every_code_cell_is_valid_python():
             ast.parse(stripped)
         except SyntaxError as exc:  # pragma: no cover - the message is the point
             pytest.fail(f"cell {index} does not parse: line {exc.lineno}, {exc.msg}")
+
+
+# ------------------------------------------------------- peer institutions
+
+
+def test_set_peer_group_records_the_size(config_file):
+    from tenuretrack.notebook import set_peer_group
+
+    line = set_peer_group(config_file, 50)
+    assert load_config(config_file).cohort.peer_group_size == 50
+    assert "50 schools closest" in line
+    assert "not a prestige ranking" in line
+
+
+def test_set_peer_group_zero_keeps_every_university(config_file):
+    from tenuretrack.notebook import set_peer_group
+
+    line = set_peer_group(config_file, 0)
+    assert load_config(config_file).cohort.peer_group_size == 0
+    assert "whole subfield" in line
+
+
+def test_a_narrow_peer_group_says_so_when_it_is_chosen(config_file):
+    """The cost of narrowing should land at the moment of choosing.
+
+    Fifteen schools is the number people reach for, and it leaves a cohort in
+    the tens. Saying so in the funnel an hour later is too late to act on.
+    """
+    from tenuretrack.notebook import set_peer_group
+
+    line = set_peer_group(config_file, 15)
+    assert "15 schools is narrow" in line
+    assert "two people per institution" in line
+
+
+def test_a_negative_peer_group_is_refused(config_file):
+    from tenuretrack.notebook import set_peer_group
+
+    with pytest.raises(NotebookError):
+        set_peer_group(config_file, -1)
+
+
+def test_the_notebook_asks_about_peer_schools_up_front():
+    """The choice belongs in the details cell, not after the cohort is built."""
+    joined = notebook_source()
+    assert "only_schools_like_mine" in joined
+    assert "how_many_schools" in joined
+    assert "set_peer_group" in joined
+    prose = notebook_prose()
+    assert "15 is too few" in prose, "the notebook should say what 15 costs"
+
+
+def test_the_notebook_stays_short():
+    """Prose that nobody reads protects nobody.
+
+    This is a length ceiling, not a target. It exists because every warning
+    added here has been worth adding, and the sum of them stopped being read.
+    If a new warning genuinely earns its place, cut an older one or raise this
+    number deliberately.
+    """
+    import json
+
+    nb = json.loads(NOTEBOOK.read_text(encoding="utf-8"))
+    words = sum(
+        len("".join(c["source"]).split())
+        for c in nb["cells"]
+        if c["cell_type"] == "markdown"
+    )
+    # 1679 before this was cut; 1009 after. The ceiling sits just above where
+    # the prose actually landed, so adding a paragraph is a deliberate act.
+    assert words < 1050, f"notebook prose is {words} words"
