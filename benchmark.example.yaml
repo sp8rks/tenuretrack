@@ -39,11 +39,14 @@ cohort:
   core_topic_share_min: 0.4       # the main lever on cohort size; see docs/methods.md
   min_led_papers: 3
   min_cell_size: 5
-  peer_group_size: 0                   # 0 keeps every university. Set it to N to keep only
-                                       # the N institutions nearest yours in subfield output,
-                                       # for a "schools like mine" comparison. It costs people
-                                       # fast: a cohort averages under two per institution, so
-                                       # anything under about 50 leaves too few for quartiles.
+  max_candidates: 2000                 # the cap on how many people the run asks
+                                       # OpenAlex about, which is the stage that
+                                       # costs the wall time. Keeps the candidates
+                                       # with the largest share of work in the
+                                       # subfield, so it is the same as raising
+                                       # core_topic_share_min until the count fits.
+                                       # The funnel reports the share it landed on.
+                                       # 0 asks about everyone who passed the filters.
   bootstrap_iterations: 2000
   article_types: ["article"]           # applied symmetrically to subject and cohort
   excluded_venues: []                  # venue names or OpenAlex source IDs to leave out.

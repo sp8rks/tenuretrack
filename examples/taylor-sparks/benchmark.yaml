@@ -49,6 +49,9 @@ cohort:
   institution_types:
   - education
   core_topic_share_min: 0.4
+  # 0, not the default 2000: this cohort was built by asking about all 4141
+  # candidates, and its committed results are what that produced.
+  max_candidates: 0
   min_led_papers: 3
   min_cell_size: 5
   bootstrap_iterations: 2000

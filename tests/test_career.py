@@ -24,6 +24,8 @@ from tenuretrack.career import (
     StaleStarts,
     StartEstimate,
     build_starts,
+    candidates_worth_asking,
+    cap_cutoff,
     estimate_start,
     estimate_starts,
     load_starts,
@@ -246,6 +248,81 @@ def test_the_pre_filter_only_drops_people_the_rule_would_drop_anyway():
     late = works(paper(2021, JOB, "last"), paper(2022, JOB, "last"))
     estimate = estimate_start(late, [ME], ARTICLES)
     assert not (2008 <= (estimate.year or 0) <= 2018 and estimate.is_usable)
+
+
+# ----------------------------------------------------------- the candidate cap
+
+
+def _candidate_with_share(author_id: str, share: float) -> object:
+    """A candidate whose topic counts give exactly this core-topic share."""
+    on_topic = int(round(share * 100))
+    return parse_candidate(
+        {
+            "id": f"https://openalex.org/{author_id}",
+            "display_name": "Someone",
+            "works_count": 100,
+            "topics": [
+                {"id": "https://openalex.org/T10001", "count": on_topic},
+                {"id": "https://openalex.org/T99999", "count": 100 - on_topic},
+            ],
+            "affiliations": [
+                {
+                    "institution": {
+                        "ror": f"https://ror.org/{JOB}",
+                        "country_code": "US",
+                        "type": "education",
+                    },
+                    "years": [2010, 2011],
+                }
+            ],
+        }
+    )
+
+
+def test_the_cap_keeps_the_most_on_topic_people(config_dict):
+    config = config_for(config_dict, max_candidates=2)
+    people = [
+        _candidate_with_share("A1000001", 0.5),
+        _candidate_with_share("A1000002", 0.9),
+        _candidate_with_share("A1000003", 0.7),
+    ]
+    kept = candidates_worth_asking(people, config)
+    assert [c.author_id for c in kept] == ["A1000002", "A1000003"]
+
+
+def test_the_cap_reports_the_share_it_landed_on(config_dict):
+    """The funnel says it as a share, because that is the filter it really is."""
+    config = config_for(config_dict, max_candidates=2)
+    people = [
+        _candidate_with_share("A1000001", 0.5),
+        _candidate_with_share("A1000002", 0.9),
+        _candidate_with_share("A1000003", 0.7),
+    ]
+    kept = candidates_worth_asking(people, config)
+    assert cap_cutoff(kept, config) == pytest.approx(0.7)
+
+
+def test_a_cap_that_does_not_bind_keeps_everyone_and_reports_nothing(config_dict):
+    config = config_for(config_dict, max_candidates=50)
+    people = [_candidate_with_share(f"A100000{i}", 0.5) for i in range(1, 4)]
+    kept = candidates_worth_asking(people, config)
+    assert len(kept) == 3
+    assert cap_cutoff(kept, config) is None
+
+
+def test_a_cap_of_zero_asks_about_everyone(config_dict):
+    config = config_for(config_dict, max_candidates=0)
+    people = [_candidate_with_share(f"A100000{i}", 0.5) for i in range(1, 4)]
+    assert len(candidates_worth_asking(people, config)) == 3
+
+
+def test_the_capped_order_is_stable_across_runs(config_dict):
+    """A batch is cached under its exact set of IDs, so ties cannot wobble."""
+    config = config_for(config_dict, max_candidates=2)
+    tied = [_candidate_with_share(f"A100000{i}", 0.6) for i in range(1, 6)]
+    first = [c.author_id for c in candidates_worth_asking(tied, config)]
+    second = [c.author_id for c in candidates_worth_asking(list(reversed(tied)), config)]
+    assert first == second
 
 
 # ------------------------------------------------------------------ screening
@@ -518,6 +595,43 @@ def test_build_starts_records_both_funnel_steps(tmp_path, config_dict):
     ]
     assert funnel.steps[0].kept == 1  # the 2021 starter never costs a request
     assert [c.author_id for c, _ in members] == [ME]
+
+
+def test_a_binding_cap_becomes_a_funnel_row_of_its_own(tmp_path, config_dict):
+    """The row is what tells a reader the cohort is the top of a ranking."""
+    server = WorksServer({})
+    config = config_for(config_dict, start_window=[2008, 2018], max_candidates=1)
+    funnel = Funnel()
+    build_starts(
+        server.client(tmp_path),
+        [
+            _candidate_with_share("A1000001", 0.5),
+            _candidate_with_share("A1000002", 0.9),
+        ],
+        config,
+        funnel,
+        data_dir=tmp_path / "data",
+    )
+    labels = [step.label for step in funnel.steps]
+    assert labels[:2] == ["plausible years", "most on topic"]
+    capped = funnel.steps[1]
+    assert capped.kept == 1
+    assert "at least 0.90" in capped.rule
+    assert "raised from" in capped.rule
+
+
+def test_no_cap_row_when_the_cap_does_not_bind(tmp_path, config_dict):
+    server = WorksServer({})
+    config = config_for(config_dict, start_window=[2008, 2018], max_candidates=50)
+    funnel = Funnel()
+    build_starts(
+        server.client(tmp_path),
+        [_candidate_with_share("A1000001", 0.5)],
+        config,
+        funnel,
+        data_dir=tmp_path / "data",
+    )
+    assert "most on topic" not in [step.label for step in funnel.steps]
 
 
 def test_build_starts_writes_nothing_into_results(tmp_path, config_dict):

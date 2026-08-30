@@ -27,7 +27,6 @@ from tenuretrack.openalex import (
     mailto_from_env,
 )
 from tenuretrack.pdf_report import build_pdf_report
-from tenuretrack.peers import enough_people
 from tenuretrack.pool import build_pool
 from tenuretrack.report import build_report
 from tenuretrack.slide_data import load_slide_data
@@ -266,9 +265,7 @@ def run(
             )
             asked = [
                 c.author_id
-                for c in candidates_worth_asking(
-                    result.kept, config.cohort.start_window
-                )
+                for c in candidates_worth_asking(result.kept, config)
             ]
             benchmarks = build_benchmarks(
                 client,
@@ -320,10 +317,6 @@ def run(
     _echo_funnel(result.funnel)
     typer.echo(f"OpenAlex requests: {requests} (served from cache: {hits}){budget}")
     typer.echo(f"{len(members)} people placed on the tenure clock.")
-    if config.cohort.peer_group_size > 0:
-        thin = enough_people(len(members))
-        if thin:
-            _echo_err(thin)
     typer.echo(
         f"Wrote {benchmarks.csv_path.name} and {benchmarks.md_path.name} "
         f"({benchmarks.institutions} institutions in the cohort)."

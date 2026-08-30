@@ -30,7 +30,7 @@ from pathlib import Path
 
 from tenuretrack.config import Config
 from tenuretrack.openalex import OpenAlexClient
-from tenuretrack.pool import Candidate, Funnel
+from tenuretrack.pool import Candidate, Funnel, core_topic_share
 from tenuretrack.works import (
     LED,
     Work,
@@ -52,6 +52,7 @@ __all__ = [
     "StaleStarts",
     "StartEstimate",
     "build_starts",
+    "cap_cutoff",
     "candidates_worth_asking",
     "estimate_start",
     "estimate_starts",
@@ -549,16 +550,50 @@ def screen_starts(
 
 
 def candidates_worth_asking(
-    candidates: Sequence[Candidate], start_window: tuple[int, int]
+    candidates: Sequence[Candidate], config: Config
 ) -> list[Candidate]:
     """The people whose works are worth fetching, in a stable order.
 
-    Later stages replay the same batched works queries out of the cache, and a
-    batch is keyed by the exact set of author IDs in it. Recomputing this list
-    the same way is what makes those replays free rather than a second full
-    download.
+    Two things happen here. Anyone whose byline years could not contain a start
+    inside the window is dropped, which removes only people the rule would have
+    dropped anyway and so saves requests without changing the cohort. Then the
+    rest are ranked by their share of work in the subfield and cut to
+    `cohort.max_candidates`.
+
+    The cut is the same selection as raising `core_topic_share_min` until the
+    count fits, and `cap_cutoff` reports the share it landed on so the funnel
+    can say it in the config's own vocabulary. It is what bounds the run: this
+    is the stage that asks OpenAlex about every person individually, and on one
+    measured subject it was 4,141 people and most of the wall time.
+
+    The order is stable, and deliberately so. Later stages replay the same
+    batched works queries out of the cache, a batch is keyed by the exact set
+    of author IDs in it, and one person moving between batches invalidates
+    every batch after them. Ties on share are broken by author ID for the same
+    reason.
     """
-    return [c for c in candidates if plausible_years(c, start_window)]
+    eligible = [c for c in candidates if plausible_years(c, config.cohort.start_window)]
+    limit = config.cohort.max_candidates
+    if limit <= 0 or len(eligible) <= limit:
+        return eligible
+    topic_ids = config.subfield.topic_ids
+    ranked = sorted(
+        eligible,
+        key=lambda c: (-core_topic_share(c, topic_ids), c.author_id.upper()),
+    )
+    return ranked[:limit]
+
+
+def cap_cutoff(kept: Sequence[Candidate], config: Config) -> float | None:
+    """The core-topic share of the last person the cap let in.
+
+    None when the cap did not bind, so a caller can tell "everyone who passed
+    the filters" from "the most on-topic 2,000 of them".
+    """
+    if config.cohort.max_candidates <= 0 or len(kept) < config.cohort.max_candidates:
+        return None
+    topic_ids = config.subfield.topic_ids
+    return min(core_topic_share(c, topic_ids) for c in kept) if kept else None
 
 
 def build_starts(
@@ -573,12 +608,24 @@ def build_starts(
 ) -> list[tuple[Candidate, StartEstimate]]:
     """Pre-filter, estimate, and screen. The whole of task 4."""
     window = config.cohort.start_window
-    worth_asking = candidates_worth_asking(candidates, window)
+    plausible = [c for c in candidates if plausible_years(c, window)]
     funnel.record(
         "plausible years",
         f"byline years could contain a start between {window[0]} and {window[1]}",
-        len(worth_asking),
+        len(plausible),
     )
+
+    worth_asking = candidates_worth_asking(candidates, config)
+    cutoff = cap_cutoff(worth_asking, config)
+    if cutoff is not None:
+        funnel.record(
+            "most on topic",
+            f"the {config.cohort.max_candidates} candidates with the largest "
+            f"share of work in the subfield, which is a share of at least "
+            f"{cutoff:.2f} here, raised from "
+            f"{config.cohort.core_topic_share_min} to fit cohort.max_candidates",
+            len(worth_asking),
+        )
 
     estimates = estimate_starts(
         client,
