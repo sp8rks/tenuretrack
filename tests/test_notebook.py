@@ -620,3 +620,77 @@ def test_the_details_cell_checks_the_form_before_anything_slow():
     joined = notebook_source()
     assert "check_details(" in joined
     assert joined.index("check_details(") < joined.index("run_cli(\"init\"")
+
+
+# ------------------------------------------- rerunning in a used folder
+
+
+def _config_for(path, orcid, name="Someone Else"):
+    path.write_text(
+        yaml.safe_dump({"subject": {"name": name, "orcid": orcid}}), encoding="utf-8"
+    )
+
+
+def test_plan_init_runs_when_there_is_no_config(tmp_path):
+    from tenuretrack.notebook import plan_init
+
+    run, note = plan_init(tmp_path / "benchmark.yaml", orcid="0000-0002-1825-0097")
+    assert run is True
+    assert "0000-0002-1825-0097" in note
+
+
+def test_plan_init_skips_when_the_config_is_for_the_same_person(tmp_path):
+    """Rerunning the cell should not silently discard the topic choices."""
+    from tenuretrack.notebook import plan_init
+
+    path = tmp_path / "benchmark.yaml"
+    _config_for(path, "0000-0002-1825-0097")
+    run, note = plan_init(path, orcid="0000-0002-1825-0097")
+    assert run is False
+    assert "step 4" in note
+
+
+def test_plan_init_reruns_when_start_over_is_ticked(tmp_path):
+    from tenuretrack.notebook import plan_init
+
+    path = tmp_path / "benchmark.yaml"
+    _config_for(path, "0000-0002-1825-0097")
+    run, _note = plan_init(path, orcid="0000-0002-1825-0097", start_over=True)
+    assert run is True
+
+
+def test_plan_init_refuses_to_benchmark_the_wrong_person(tmp_path):
+    """The failure this exists for is the silent one.
+
+    Reusing a folder for a second subject would otherwise build a cohort for
+    whoever the file already named, and produce a report that looks perfectly
+    reasonable.
+    """
+    from tenuretrack.notebook import plan_init
+
+    path = tmp_path / "benchmark.yaml"
+    _config_for(path, "0000-0001-8020-7711", name="Someone Else")
+    with pytest.raises(NotebookError) as caught:
+        plan_init(path, orcid="0000-0001-8091-9428")
+    message = str(caught.value)
+    assert "Someone Else" in message
+    assert "0000-0001-8020-7711" in message
+    assert "0000-0001-8091-9428" in message
+    assert "start_over" in message
+    assert "folder_name" in message
+
+
+def test_plan_init_takes_an_orcid_url(tmp_path):
+    from tenuretrack.notebook import plan_init
+
+    path = tmp_path / "benchmark.yaml"
+    _config_for(path, "0000-0002-1825-0097")
+    run, _ = plan_init(path, orcid="https://orcid.org/0000-0002-1825-0097")
+    assert run is False, "the URL and the bare id are the same person"
+
+
+def test_the_details_cell_asks_before_it_overwrites(tmp_path):
+    joined = notebook_source()
+    assert "plan_init(" in joined
+    assert "if run_init:" in joined
+    assert joined.index("plan_init(") < joined.index("prompt_for_api_key()")
