@@ -352,6 +352,17 @@ def write_report(
         "estimated to have begun a first independent faculty appointment between "
         f"{config.cohort.start_window[0]} and {config.cohort.start_window[1]} in "
         f"{label}. {subject.name} is not among them.",
+    ]
+    lag = subject.start_year - config.cohort.start_window[1]
+    if lag > 0:
+        lines += [
+            "",
+            f"Every one of them began at least {lag} year(s) before "
+            f"{subject.name} did, because nobody who started more recently has "
+            f"finished {horizon} career years yet. Publishing conventions move, "
+            "so read the gap in years as part of the comparison.",
+        ]
+    lines += [
         "",
         "These numbers describe what a group of people did. They are not a "
         "standard, nobody in the cohort agreed to be measured, and no part of "
