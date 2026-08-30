@@ -26,7 +26,13 @@ from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 
-from tenuretrack.config import MAX_PROPOSED_TOPICS, ROR_RE, CohortSpec, OutputSpec
+from tenuretrack.config import (
+    MAX_PROPOSED_TOPICS,
+    ROR_RE,
+    CohortSpec,
+    OutputSpec,
+    derive_start_window,
+)
 from tenuretrack.openalex import OpenAlexClient, OpenAlexError, OpenAlexHTTPError
 from tenuretrack.pool import estimate_pool_size
 from tenuretrack.works import (
@@ -720,10 +726,21 @@ def first_byline_year(
     return min(years) if years else None
 
 
-def draft_config(result: InitResult) -> dict:
-    """The `benchmark.yaml` mapping, in the order `benchmark.example.yaml` uses."""
+def draft_config(result: InitResult, today: _dt.date | None = None) -> dict:
+    """The `benchmark.yaml` mapping, in the order `benchmark.example.yaml` uses.
+
+    The cohort window is resolved to calendar years here rather than left to
+    the `start_window_years` rule, so the file records the window the run
+    actually used and a person can read it and widen it by hand.
+    """
     cohort = CohortSpec()
     output = OutputSpec()
+    window = derive_start_window(
+        result.start_year,
+        cohort.start_window_years,
+        cohort.horizon_years,
+        (today or _dt.date.today()).year,
+    )
     return {
         "subject": {
             "name": result.subject_name,
@@ -741,7 +758,7 @@ def draft_config(result: InitResult) -> dict:
             "excluded_topics": [],
         },
         "cohort": {
-            "start_window": list(cohort.start_window),
+            "start_window": list(window),
             "horizon_years": cohort.horizon_years,
             "countries": list(cohort.countries),
             "institution_types": list(cohort.institution_types),
@@ -786,6 +803,26 @@ def format_result(result: InitResult) -> str:
         )
     if result.alt_author_ids:
         lines.append(f"Merged profiles: {', '.join(result.alt_author_ids)}")
+    defaults = CohortSpec()
+    window = derive_start_window(
+        result.start_year,
+        defaults.start_window_years,
+        defaults.horizon_years,
+        _dt.date.today().year,
+    )
+    lines.append(
+        f"Cohort start window: {window[0]} to {window[1]}. That is "
+        f"{defaults.start_window_years} years either side of {result.start_year}, "
+        "so the people you are read against were publishing under roughly the "
+        "same conventions you were, with the recent end held back far enough "
+        f"that everyone in it has finished {defaults.horizon_years} career years."
+    )
+    if window[1] < result.start_year:
+        lines.append(
+            f"  Nobody who started as recently as {result.start_year} has "
+            f"{defaults.horizon_years} career years yet, so the whole cohort "
+            "began before you did."
+        )
     lines.append("")
     lines.append(
         f"Read {result.window_works} paper(s) of the {result.works_seen} OpenAlex "

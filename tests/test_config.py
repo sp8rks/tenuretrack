@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
+import datetime as _dt
 from pathlib import Path
 
 import pytest
 import yaml
 
-from tenuretrack.config import ConfigError, build_config, load_config
+from tenuretrack.config import (
+    MIN_START_YEAR,
+    ConfigError,
+    build_config,
+    derive_start_window,
+    load_config,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -108,6 +115,57 @@ def test_bad_ror_is_rejected(config_dict):
 def test_backwards_start_window_is_rejected(config_dict):
     config_dict["cohort"]["start_window"] = [2018, 2008]
     assert "backwards" in problems_from(config_dict)
+
+
+# ---------------------------------------------- the window derived from the subject
+
+
+def test_an_absent_window_is_derived_from_the_subject(config_dict):
+    """Publishing norms move, so the cohort is drawn from the subject's own era."""
+    del config_dict["cohort"]["start_window"]
+    config_dict["subject"]["start_year"] = 2005
+    window = build_config(config_dict).cohort.start_window
+    assert window == (1995, 2015)
+
+
+def test_the_recent_end_is_capped_so_everyone_finished_the_horizon(config_dict):
+    """Someone who started three years ago has no year six to be read at."""
+    del config_dict["cohort"]["start_window"]
+    config_dict["subject"]["start_year"] = 2022
+    config_dict["cohort"]["horizon_years"] = 6
+    this_year = _dt.date.today().year
+    window = build_config(config_dict).cohort.start_window
+    assert window == (2012, this_year - 6)
+
+
+def test_the_span_either_side_is_configurable(config_dict):
+    del config_dict["cohort"]["start_window"]
+    config_dict["subject"]["start_year"] = 2005
+    config_dict["cohort"]["start_window_years"] = 4
+    assert build_config(config_dict).cohort.start_window == (2001, 2009)
+
+
+def test_an_explicit_window_still_wins(config_dict):
+    config_dict["subject"]["start_year"] = 2005
+    config_dict["cohort"]["start_window"] = [2008, 2018]
+    assert build_config(config_dict).cohort.start_window == (2008, 2018)
+
+
+def test_a_window_that_cannot_hold_anyone_is_reported(config_dict):
+    """A recent start and a narrow span leave nobody who has finished the horizon."""
+    del config_dict["cohort"]["start_window"]
+    config_dict["subject"]["start_year"] = _dt.date.today().year
+    config_dict["cohort"]["start_window_years"] = 1
+    assert "no cohort start window is possible" in problems_from(config_dict)
+
+
+def test_the_window_never_reaches_below_the_floor():
+    assert derive_start_window(1952, 10, 6, 2026)[0] == MIN_START_YEAR
+
+
+def test_a_span_outside_the_allowed_range_is_rejected(config_dict):
+    config_dict["cohort"]["start_window_years"] = 40
+    assert "cohort.start_window_years 40 is outside 1 to 30" in problems_from(config_dict)
 
 
 def test_share_given_as_a_percent_is_rejected(config_dict):
