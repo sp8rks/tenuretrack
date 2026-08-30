@@ -490,51 +490,7 @@ def screen_pool(
         len(kept),
     )
 
-    if cohort.peer_group_size > 0:
-        kept = _keep_peers(kept, config, funnel)
-
     return kept
-
-
-def _keep_peers(
-    kept: list[Candidate], config: Config, funnel: Funnel
-) -> list[Candidate]:
-    """Narrow to institutions of standing similar to the subject's.
-
-    Ranked from the screened candidates rather than from a separate OpenAlex
-    query, which costs nothing against a daily budget the whole run is fighting
-    for, and measures the thing that matters here: presence in this subfield,
-    not size or fame in general.
-    """
-    from tenuretrack.peers import institution_ranking, peer_group
-
-    cohort = config.cohort
-    ranking = institution_ranking(kept, cohort.institution_types)
-    group = peer_group(ranking, config.subject.institution_ror, cohort.peer_group_size)
-
-    survivors = [
-        person
-        for person in kept
-        if any(
-            affiliation.ror
-            and affiliation.ror.rstrip("/").rsplit("/", 1)[-1].lower() in group.rors
-            for affiliation in person.affiliations
-        )
-    ]
-
-    where = (
-        f"ranked {group.subject_rank} of {group.total_institutions} by subfield output"
-        if group.subject_rank is not None
-        else "unranked: it carries no on-topic candidates of its own"
-    )
-    funnel.record(
-        "peer institutions",
-        f"an affiliation at one of the {cohort.peer_group_size} institutions "
-        f"nearest {config.subject.institution_name} in subfield output "
-        f"({where})",
-        len(survivors),
-    )
-    return survivors
 
 
 def build_pool(

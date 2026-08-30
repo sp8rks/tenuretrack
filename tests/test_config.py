@@ -110,6 +110,24 @@ def test_backwards_start_window_is_rejected(config_dict):
     assert "backwards" in problems_from(config_dict)
 
 
+def test_a_leftover_zero_peer_group_still_loads(config_dict):
+    """The old default wrote a 0, and a 0 asks for nothing that is gone."""
+    config_dict["cohort"]["peer_group_size"] = 0
+    assert build_config(config_dict).cohort.max_candidates == 2000
+
+
+def test_a_config_still_asking_for_peers_is_told_it_is_gone(config_dict):
+    config_dict["cohort"]["peer_group_size"] = 50
+    problems = problems_from(config_dict)
+    assert "peer_group_size has been removed" in problems
+    assert "max_candidates" in problems
+
+
+def test_the_candidate_cap_can_be_turned_off(config_dict):
+    config_dict["cohort"]["max_candidates"] = 0
+    assert build_config(config_dict).cohort.max_candidates == 0
+
+
 def test_share_given_as_a_percent_is_rejected(config_dict):
     config_dict["cohort"]["core_topic_share_min"] = 25
     assert "share, not a percent" in problems_from(config_dict)

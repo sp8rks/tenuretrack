@@ -58,8 +58,8 @@ Someone one or two years into the clock may have almost nothing published under 
 | Candidates | Authors with any of the topics, at least 10 works, affiliation in the configured countries, excluding the subject | US |
 | Core-topic share | Sum of topic shares over the configured topics | at least 0.4 |
 | University | At least one `education` affiliation | |
-| Peer institutions | Affiliated with one of the N institutions nearest the subject's in subfield output | off |
 | Plausible years | Byline years could contain a start inside the window | |
+| Most on topic | The candidates with the largest core-topic share, capped | 2,000 |
 | Career start | A confident first independent start could be estimated | |
 | Start in window | That estimate falls inside the cohort window | 2008 to 2018 |
 | PI-like | At least 3 led journal articles in the window, activity in at least 2 distinct window years | |
@@ -69,17 +69,17 @@ The subject is removed from their own pool: a distribution someone is being plac
 
 The core-topic share is the main lever on cohort size, and the default is set from a measurement rather than from taste. On a six-topic materials-science subject, a pool of 82,601 US authors left 27,409 people at a share of 0.25, 4,738 at 0.4, and 836 at 0.5. A share of 0.25 admits anyone who does a quarter of their work in the subfield, which is most of a discipline rather than a peer group, and it makes the per-candidate stages that follow cost hours. Raise it for a tighter cohort, lower it for a broader one, and read the funnel to see what the change did.
 
-### 4.1 Peer institutions
+### 4.1 The candidate cap
 
-`peer_group_size` answers a narrower question than the default one: not "what do people in my subfield publish" but "what do people at schools like mine publish". It is off by default, because the first question is the one most people mean.
+The stage after this one asks OpenAlex about every remaining candidate individually, and it is where a run spends most of its wall time and most of its request budget. `cohort.max_candidates` bounds it. The candidates left after the cheap filters are ranked by their core-topic share and the top 2,000 are kept.
 
-There is no prestige ranking in OpenAlex, and the rankings people have in mind (US News, Carnegie tiers) are not open data this tool can redistribute. So a peer is defined by what the data supports: institutions are ordered by how many on-topic candidates they carry, the subject's institution is located in that order, and the peer group is the window of `peer_group_size` institutions sitting either side of it. The window slides rather than shrinks at either end, so the highest-output subject in a field gets a full group below them rather than half of one.
+That is the same selection as raising `core_topic_share_min` until the count fits, so the funnel says it that way: the rule text names the share the cap actually landed on. Reading it as an adaptive threshold is the honest description, because that is what it is. A fixed share of 0.4 means something different in a field with 80,000 people than in one with 4,000, and the cap is what makes the cohort a comparable size either way.
 
-This is a claim about output in one subfield, not about prestige. An institution that is famous for something else sits low in this order, which is right for this purpose and wrong for most others. The report says so rather than letting "peer" be read as a ranking.
+What it costs is a specific bias, and it is worth naming. Ranking by share selects people whose work is concentrated in the subfield over people who range more widely, and a person who ranges widely may publish more. So a cohort drawn under a binding cap can read slightly lower than the whole eligible group would. The alternative, a random sample above the share floor, is unbiased and was considered; ranking by relevance was chosen because a cohort of the most on-topic people is the one a reader can describe in a sentence, and because the funnel can report the cutoff, which a seed cannot. A run whose cap did not bind has no such bias, and no `most on topic` row in its funnel.
 
-The ordering is computed from the screened candidates already in memory, not from a separate OpenAlex query, so the feature costs nothing against a daily budget the rest of the run is competing for.
+Measured on the one worked subject: 4,141 people reached this stage, the works fetch cost about 0.3 requests per person, and 1,091 of them finished in the cohort. So a cap of 2,000 is roughly 530 people in the cohort for about 600 requests. Set it to 0 to ask about everyone who passed the filters, which is what produced the committed example.
 
-The cost is people, and it is steep. One materials-science cohort was 1091 people across 622 institutions, under two people per school. A peer group of 15 leaves something in the tens, which will not carry a p25 and a p75 that survive resampling. Below 100 people the run prints a warning naming the number. The tool does not refuse, because it is the user's cohort, but a quartile over a group that small moves whenever one person joins or leaves, and saying so is the same rule as refusing to compare citations at different horizons.
+The tool used to answer a second question here, "what do people at schools like mine publish", by narrowing to the institutions nearest the subject's in subfield output. That is gone. It was confusing in the way that matters: "peer" reads as a prestige ranking, no such ranking exists in OpenAlex to use, and the thing it actually measured was subfield output, which is a different claim than anyone hearing "schools like mine" would take it for. It also cost people fast, a cohort averaging under two per institution does not survive being cut to fifteen schools, so the feature most likely to be turned on by someone who wanted a sharper comparison was the one most likely to leave them a group too thin to carry quartiles.
 
 The country rule is applied twice, once in the query and once locally, because a pool gathered under one config can be re-screened under another without refetching. The core-topic share is derived from the work counts on the author's topics. OpenAlex does not publish a per-author topic share: entries under `topics` carry `count` and no share, and the separate `topic_share` field is a different quantity, the author's share of that topic's global output, which for one person sums to about 0.001. Using it here would be a category error. The code reads a `share` field if one ever appears and falls back to counts, which is the path that runs today.
 

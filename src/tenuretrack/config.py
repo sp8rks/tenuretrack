@@ -72,6 +72,10 @@ _COHORT_KEYS = {
     "excluded_venues",
     "min_led_papers",
     "min_cell_size",
+    "max_candidates",
+    # Removed, but still an accepted key: a config carrying the 0 the old
+    # default wrote should load rather than fail on an unknown key. A non-zero
+    # value asks for behaviour that is gone, and `_cohort` refuses it.
     "peer_group_size",
     "bootstrap_iterations",
     "article_types",
@@ -160,14 +164,20 @@ class CohortSpec:
     core_topic_share_min: float = 0.4
     min_led_papers: int = 3
     min_cell_size: int = 5
-    peer_group_size: int = 0
-    """Keep only people at the N institutions nearest the subject's in subfield
-    output. 0, the default, keeps every institution.
+    max_candidates: int = 2000
+    """How many people the run may ask OpenAlex about, at most.
 
-    Off by default because the whole-subfield cohort is the question most
-    people mean, and because narrowing costs people fast: a cohort averaging
-    under two per institution does not survive being cut to fifteen schools.
-    See `tenuretrack/peers.py`.
+    The candidates left after the cheap filters are ranked by their share of
+    work in the subfield and the top `max_candidates` are kept, which is the
+    same selection as raising `core_topic_share_min` until the count fits. The
+    funnel reports the share the cap landed on.
+
+    Measured on one materials-science subject: 4,141 people reached this stage,
+    1,091 finished in the cohort, and the works fetch cost about 0.3 requests
+    per person asked. So 2,000 is roughly 530 people in the cohort for 600
+    requests, which carries quartiles comfortably and halves the longest stage.
+
+    0 turns the cap off and asks about everyone who passed the filters.
     """
     bootstrap_iterations: int = 2000
     article_types: tuple[str, ...] = ("article",)
@@ -535,8 +545,15 @@ def _cohort(raw: dict, problems: list[str]) -> CohortSpec:
             "a cohort member"
         ),
     )
-    peer_size = _int(
-        raw, "peer_group_size", defaults.peer_group_size, 0, 5000, "cohort", problems
+    if raw.get("peer_group_size"):
+        problems.append(
+            "cohort.peer_group_size has been removed: the cohort is now the "
+            "people most on-topic in the subfield, capped by "
+            "cohort.max_candidates, rather than the people at institutions "
+            "near yours. Delete the line (see docs/methods.md)."
+        )
+    max_candidates = _int(
+        raw, "max_candidates", defaults.max_candidates, 0, 100_000, "cohort", problems
     )
     iterations = _int(
         raw,
@@ -556,7 +573,7 @@ def _cohort(raw: dict, problems: list[str]) -> CohortSpec:
         core_topic_share_min=core_share,
         min_led_papers=min_led,
         min_cell_size=min_cell,
-        peer_group_size=peer_size,
+        max_candidates=max_candidates,
         bootstrap_iterations=iterations,
         article_types=tuple(article_types),
         excluded_venues=tuple(excluded_venues),
