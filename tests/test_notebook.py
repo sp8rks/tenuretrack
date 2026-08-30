@@ -473,3 +473,56 @@ def test_the_notebook_stays_short():
     # 1679 before this was cut; 1009 after. The ceiling sits just above where
     # the prose actually landed, so adding a paragraph is a deliberate act.
     assert words < 1050, f"notebook prose is {words} words"
+
+
+def test_the_install_cell_checks_every_name_the_notebook_imports():
+    """The guard is only worth having if it lists what the cells actually use.
+
+    A Colab notebook and the package it drives are two files that travel
+    apart: a copy saved in Drive can be newer than what pip fetched from the
+    main branch. The install cell checks for the names by hand, so a name
+    added to a later cell and not to that list would go back to failing as an
+    ImportError three cells down.
+    """
+    import ast
+    import json
+    import re
+
+    nb = json.loads(NOTEBOOK.read_text(encoding="utf-8"))
+    source = chr(10).join(
+        "".join(c["source"]) for c in nb["cells"] if c["cell_type"] == "code"
+    )
+
+    guarded = set(re.findall(r'"(\w+)",', source.split("NEEDED = (")[1].split(")")[0]))
+
+    imported: set[str] = set()
+    stripped = chr(10).join(
+        line
+        for line in source.splitlines()
+        if not line.lstrip().startswith(("!", "%"))
+    )
+    for node in ast.walk(ast.parse(stripped)):
+        if isinstance(node, ast.ImportFrom) and node.module == "tenuretrack.notebook":
+            imported.update(alias.name for alias in node.names)
+
+    assert imported, "the notebook should import from tenuretrack.notebook"
+    assert imported <= guarded, (
+        f"the install cell does not check for: {sorted(imported - guarded)}"
+    )
+
+
+def test_the_install_cell_names_exist_on_the_package():
+    """A guard listing a name that was renamed would fail every run."""
+    import json
+    import re
+
+    from tenuretrack import notebook as module
+
+    nb = json.loads(NOTEBOOK.read_text(encoding="utf-8"))
+    source = chr(10).join(
+        "".join(c["source"]) for c in nb["cells"] if c["cell_type"] == "code"
+    )
+    guarded = re.findall(r'"(\w+)",', source.split("NEEDED = (")[1].split(")")[0])
+
+    missing = [name for name in guarded if not hasattr(module, name)]
+    assert not missing, f"the install cell checks for names that do not exist: {missing}"
