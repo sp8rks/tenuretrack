@@ -14,7 +14,7 @@ import typer
 import yaml
 
 from tenuretrack import __version__
-from tenuretrack.career import build_starts, candidates_worth_asking
+from tenuretrack.career import StaleStarts, build_starts, candidates_worth_asking
 from tenuretrack.chaperone import build_chaperone
 from tenuretrack.config import Config, ConfigError, load_config
 from tenuretrack.metrics import build_benchmarks
@@ -228,7 +228,13 @@ def run(
     cache_dir: Path = CACHE_OPTION,
     data_dir: Path = DATA_OPTION,
     refresh: bool = typer.Option(
-        False, "--refresh", help="Gather the candidate pool again from scratch."
+        False,
+        "--refresh",
+        help=(
+            "Gather the candidate pool and estimate every career start again "
+            "from scratch. Cached OpenAlex responses are still used, so only "
+            "requests the new settings actually change are made again."
+        ),
     ),
 ) -> None:
     """Build the cohort, compute the norms, and write the report."""
@@ -287,6 +293,11 @@ def run(
                 this_year=_dt.date.today().year,
                 on_progress=typer.echo,
             )
+        except StaleStarts as exc:
+            # Not a network failure: the files on disk are fine, they just
+            # answer a different question than the config now asks.
+            _echo_err(str(exc))
+            raise typer.Exit(code=EXIT_BAD_CONFIG) from exc
         except QuotaExhausted as exc:
             # Everything fetched is cached and the funnel so far is on disk, so
             # the rerun picks up here rather than starting over.

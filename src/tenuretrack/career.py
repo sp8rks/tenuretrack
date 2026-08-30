@@ -21,6 +21,7 @@ Estimates hold author IDs, so they are written under `data/` and never to
 from __future__ import annotations
 
 import gzip
+import hashlib
 import json
 import os
 from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -48,18 +49,33 @@ __all__ = [
     "HIGH",
     "LOW",
     "NO_RULE",
+    "StaleStarts",
     "StartEstimate",
     "build_starts",
     "candidates_worth_asking",
     "estimate_start",
     "estimate_starts",
     "load_starts",
+    "read_fingerprint",
+    "starts_fingerprint",
     "load_works",
     "plausible_years",
     "screen_starts",
 ]
 
 STARTS_FILENAME = "starts.jsonl.gz"
+
+STARTS_META_FILENAME = "starts.meta.json"
+"""What the estimates in `STARTS_FILENAME` were built from.
+
+The estimates file is reused whole whenever it exists, which is what makes a
+run that died on quota restartable for nothing. But it is keyed by its
+filename and nothing else, so a config edited between two runs used to be
+answered out of a file built under the old config, silently: people newly
+eligible under a wider window had no entry, and `screen_starts` drops anyone
+without one without a word. This records the inputs so the reuse can be
+refused instead.
+"""
 
 WORKS_FILENAME = "works.jsonl.gz"
 """Everyone's papers, kept so later stages never refetch them.
@@ -107,6 +123,15 @@ visible. Rule 2 infers the trainee institution from them."""
 
 PROGRESS_BLOCK = 20
 """Batches between progress lines."""
+
+
+class StaleStarts(RuntimeError):
+    """Cached career starts were built under rules the current config changed.
+
+    Raised rather than quietly re-estimating, because re-estimating is the
+    most expensive stage in the pipeline and spending a few thousand requests
+    of somebody's daily budget is their decision to make, not this function's.
+    """
 
 
 @dataclass(frozen=True, slots=True)
@@ -279,6 +304,73 @@ def plausible_years(candidate: Candidate, start_window: tuple[int, int]) -> bool
 # --------------------------------------------------------------------- storage
 
 
+def starts_fingerprint(author_ids: Sequence[str], config: Config) -> dict:
+    """Everything that decides what ends up in the estimates file.
+
+    The people are recorded as a hash of the sorted IDs rather than as a list,
+    because the file lives beside a pool that holds names and a list of author
+    IDs is one of the things the aggregates-only rule keeps out of anything
+    shareable. A count travels with it so a mismatch can be described.
+    """
+    ids = sorted({a.upper() for a in author_ids if a})
+    digest = hashlib.sha256(json.dumps(ids).encode("utf-8")).hexdigest()
+    return {
+        "start_window": list(config.cohort.start_window),
+        "horizon_years": config.cohort.horizon_years,
+        "article_types": list(config.cohort.article_types),
+        "excluded_venues": list(config.cohort.excluded_venues),
+        "people": len(ids),
+        "people_hash": digest,
+    }
+
+
+def read_fingerprint(path: str | Path) -> dict | None:
+    """The fingerprint beside an estimates file, or None if there is not one."""
+    path = Path(path)
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def describe_drift(old: Mapping, new: Mapping) -> str:
+    """Name what changed between two fingerprints, in the config's own words."""
+    if old.get("start_window") != new.get("start_window"):
+        was, now = old.get("start_window"), new.get("start_window")
+        return (
+            f"the cohort window is now {_window_words(now)}, and the saved "
+            f"estimates were built for {_window_words(was)}"
+        )
+    if old.get("horizon_years") != new.get("horizon_years"):
+        return (
+            f"horizon_years is now {new.get('horizon_years')}, and the saved "
+            f"estimates were built for {old.get('horizon_years')}, which changes "
+            "how many years of papers were asked for"
+        )
+    for key in ("article_types", "excluded_venues"):
+        if old.get(key) != new.get(key):
+            return (
+                f"cohort.{key} changed, and every start was estimated from the "
+                "papers the old setting left in"
+            )
+    if old.get("people_hash") != new.get("people_hash"):
+        return (
+            f"the screening now asks about {new.get('people')} people and the "
+            f"saved estimates cover {old.get('people')}, so a filter earlier in "
+            "the funnel changed"
+        )
+    return ""
+
+
+def _window_words(window: object) -> str:
+    if isinstance(window, (list, tuple)) and len(window) == 2:
+        return f"{window[0]} to {window[1]}"
+    return str(window)
+
+
 def estimate_starts(
     client: OpenAlexClient,
     candidates: Sequence[Candidate],
@@ -295,15 +387,40 @@ def estimate_starts(
     number of people.
     """
     dest = Path(dest)
-    if dest.exists() and not refresh:
-        if on_progress:
-            on_progress(f"Career starts already estimated at {dest}.")
-        return load_starts(dest)
-
     window = config.cohort.start_window
     first_year = window[0] - TRAINEE_LOOKBACK_YEARS
     last_year = window[1] + config.cohort.horizon_years
     author_ids = [c.author_id for c in candidates if c.author_id]
+    meta_path = dest.parent / STARTS_META_FILENAME
+    fingerprint = starts_fingerprint(author_ids, config)
+
+    if dest.exists() and not refresh:
+        saved = read_fingerprint(meta_path)
+        if saved is None:
+            # Written before this check existed. Reused rather than refused,
+            # because refusing would charge a full re-estimate to everyone
+            # holding a file from an earlier version.
+            if on_progress:
+                on_progress(
+                    f"Career starts already estimated at {dest}. There is no "
+                    f"{STARTS_META_FILENAME} beside it, so what they were built "
+                    "from cannot be checked. If the cohort window or any filter "
+                    "changed since, rerun with --refresh."
+                )
+            return load_starts(dest)
+        drift = describe_drift(saved, fingerprint)
+        if drift:
+            raise StaleStarts(
+                f"{dest} cannot be reused: {drift}. Reusing it would leave "
+                "every newly eligible person without an estimate, and they are "
+                "dropped without a word. Rerun with --refresh to estimate "
+                f"again, which refetches all {len(author_ids)} people because a "
+                "batch is cached under the exact set of IDs in it, or put the "
+                "old setting back to carry on with what is already downloaded."
+            )
+        if on_progress:
+            on_progress(f"Career starts already estimated at {dest}.")
+        return load_starts(dest)
 
     if on_progress:
         batches = -(-len(author_ids) // 50)
@@ -356,6 +473,9 @@ def estimate_starts(
 
     os.replace(tmp, dest)
     os.replace(works_tmp, works_dest)
+    meta_path.write_text(
+        json.dumps(fingerprint, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
     if on_progress:
         on_progress(
             f"Career starts estimated for {done} people "
