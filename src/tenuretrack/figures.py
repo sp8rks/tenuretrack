@@ -12,6 +12,7 @@ cohort is sensible, not to be admired.
 
 from __future__ import annotations
 
+import textwrap
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -27,6 +28,7 @@ __all__ = [
     "INK",
     "MUTED",
     "dot_and_range_chart",
+    "panel_range_chart",
     "funnel_chart",
     "role_rate_chart",
     "venue_chart",
@@ -228,3 +230,88 @@ def role_rate_chart(
     ax.set_yticks([])
     ax.spines["left"].set_visible(False)
     return _save(fig, path)
+
+
+def panel_range_chart(
+    panels: Sequence[tuple[str, float | None, float, float, float]],
+    subject_name: str,
+    horizon: int,
+    path: str | Path,
+    *,
+    width: float = 12.0,
+    height: float = 3.8,
+):
+    """One small panel per metric: the cohort's middle half, and the subject in it.
+
+    `panels` is (label, subject value, p25, p50, p75). The subject's value may
+    be None, for a metric that is reported and not compared.
+
+    The band-and-diamond shape repeats across metrics on their own scales,
+    which is what lets someone read several different units at a glance.
+    `dot_and_range_chart` puts every metric on one normalised axis instead,
+    which is denser but hides the actual numbers. The deck wants the compact
+    one; the PDF has room for the one that shows its working.
+    """
+    panels = list(panels)
+    if not panels:
+        raise ValueError("panel_range_chart needs at least one panel")
+
+    short = subject_name.split()[0] if subject_name.split() else subject_name
+
+    fig, axes = plt.subplots(1, len(panels), figsize=(width, height))
+    if len(panels) == 1:
+        axes = [axes]
+    fig.patch.set_facecolor("white")
+
+    for ax, (label, value, p25, p50, p75) in zip(axes, panels, strict=True):
+        ax.set_facecolor("white")
+        for side in ("top", "right", "bottom"):
+            ax.spines[side].set_visible(False)
+        ax.spines["left"].set_color(MUTED)
+        ax.tick_params(colors=INK, labelsize=8, bottom=False, labelbottom=False)
+        ax.set_xlim(0, 1)
+
+        ax.axhspan(p25, p75, xmin=0.30, xmax=0.88, color=COHORT, zorder=1)
+        ax.plot([0.30, 0.88], [p50, p50], color="#3b5b7a", lw=2.4, zorder=2)
+
+        top = max([p75, value if value is not None else p75]) or 1.0
+        ax.set_ylim(0, top * 1.30)
+
+        for y, text in (
+            (p75, "p75 " + _tidy(p75)),
+            (p50, "median " + _tidy(p50)),
+            (p25, "p25 " + _tidy(p25)),
+        ):
+            ax.text(0.28, y, text, ha="right", va="center", fontsize=7.5,
+                    color=MUTED, **FONT)
+
+        if value is not None:
+            ax.plot([0.59], [value], marker="D", markersize=9, color=ACCENT, zorder=3)
+            ax.text(0.65, value, short + ": " + _tidy(value), ha="left",
+                    va="center", fontsize=8.5, color=ACCENT, fontweight="bold", **FONT)
+        else:
+            # Above the band, where it cannot land on the median label.
+            ax.text(0.59, top * 1.18, "reported," + chr(10) + "not compared",
+                    ha="center", va="center", fontsize=7.5, color=MUTED,
+                    style="italic", **FONT)
+
+        ax.set_title(textwrap.fill(label, 26), fontsize=9.5, color=INK, pad=10, **FONT)
+
+    fig.suptitle(
+        "Cohort middle half (shaded, median line) and " + short
+        + ", both through career year " + str(horizon),
+        fontsize=11, color=INK, **FONT,
+    )
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig.tight_layout(rect=(0, 0, 1, 0.94))
+    fig.savefig(path, dpi=DPI, facecolor="white")
+    plt.close(fig)
+    return path
+
+
+def _tidy(value: float) -> str:
+    """Numbers as a reader writes them: no trailing zeros on a whole count."""
+    if value == int(value):
+        return str(int(value))
+    return f"{value:.2f}".rstrip("0").rstrip(".")

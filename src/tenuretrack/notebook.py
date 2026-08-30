@@ -42,6 +42,7 @@ __all__ = [
     "prompt_for_api_key",
     "run_cli",
     "set_api_key",
+    "set_peer_group",
     "set_mailto",
     "zip_results",
 ]
@@ -313,6 +314,44 @@ def keep_topics(
     )
     _load(path)  # fail here, with the config error, rather than during the run
     return kept
+
+
+def set_peer_group(path: str | Path, size: int) -> str:
+    """Record a peer-institution restriction in `benchmark.yaml`.
+
+    `size` of 0 turns it off, which is the default and the question most people
+    mean. Returns the line the cell prints, because narrowing the cohort has a
+    cost the person should see at the moment they choose it rather than in the
+    funnel an hour later.
+    """
+    from tenuretrack.peers import MIN_PEER_COHORT
+
+    size = int(size)
+    if size < 0:
+        raise NotebookError("how_many_schools cannot be negative")
+
+    path = Path(path)
+    raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    raw.setdefault("cohort", {})["peer_group_size"] = size
+    path.write_text(
+        yaml.safe_dump(raw, sort_keys=False, allow_unicode=True), encoding="utf-8"
+    )
+    _load(path)  # fail here, with the config error, rather than during the run
+
+    if size == 0:
+        return "Comparing against your whole subfield, at every university."
+    line = (
+        f"Comparing against the {size} schools closest to yours in subfield "
+        "output. This orders schools by output in your subfield, which is not "
+        "a prestige ranking."
+    )
+    if size < 50:
+        line += (
+            f" {size} schools is narrow: a cohort runs to roughly two people "
+            "per institution, so expect a small group. The run warns if it "
+            f"leaves fewer than {MIN_PEER_COHORT} people."
+        )
+    return line
 
 
 def _topic_row(topic: Topic) -> dict[str, str]:

@@ -26,7 +26,7 @@ from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 
-from tenuretrack.config import MAX_TOPICS, ROR_RE, CohortSpec, OutputSpec
+from tenuretrack.config import MAX_PROPOSED_TOPICS, ROR_RE, CohortSpec, OutputSpec
 from tenuretrack.openalex import OpenAlexClient, OpenAlexError, OpenAlexHTTPError
 from tenuretrack.pool import estimate_pool_size
 from tenuretrack.works import (
@@ -97,7 +97,7 @@ RELAXED_TOPIC_PAPERS = 2
 leaves fewer than `WANTED_TOPICS`, the count relaxes by one and the printout
 says the record is thin."""
 
-WANTED_TOPICS = 4
+WANTED_TOPICS = MAX_PROPOSED_TOPICS
 TOP_VENUES_PER_TOPIC = 3
 
 START_YEAR_SLACK = 1
@@ -220,7 +220,7 @@ def select_window_works(
 
 
 def propose_topics(
-    works: Sequence[Work], limit: int = MAX_TOPICS
+    works: Sequence[Work], limit: int = MAX_PROPOSED_TOPICS
 ) -> tuple[TopicProposal, ...]:
     """Rank topics by how many of these papers sit in each one.
 

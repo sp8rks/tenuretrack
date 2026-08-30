@@ -15,7 +15,7 @@ subject:
 
 subfield:
   label: "solid-state battery materials" # plain words for slides
-  topics:                               # 4 to 6 OpenAlex topic IDs; init proposes these from your papers
+  topics:                               # up to 3; init proposes them from your papers
     - id: T00000
       name: "Example topic A"
     - id: T00001
@@ -30,6 +30,11 @@ cohort:
   core_topic_share_min: 0.4       # the main lever on cohort size; see docs/methods.md
   min_led_papers: 3
   min_cell_size: 5
+  peer_group_size: 0                   # 0 keeps every university. Set it to N to keep only
+                                       # the N institutions nearest yours in subfield output,
+                                       # for a "schools like mine" comparison. It costs people
+                                       # fast: a cohort averages under two per institution, so
+                                       # anything under about 50 leaves too few for quartiles.
   bootstrap_iterations: 2000
   article_types: ["article"]           # applied symmetrically to subject and cohort
   excluded_venues: []                  # venue names or OpenAlex source IDs to leave out.

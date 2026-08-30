@@ -47,7 +47,7 @@ The subject's window papers are journal articles (the shared `article_types` rul
 
 Topics are proposed from the window papers and confirmed by the subject before any cohort is built. Each paper votes once, for its OpenAlex `primary_topic`; counting every listed topic would let one paper vote five times. Topics are ranked by how many of the subject's papers sit in each, and each proposal is shown with the venues those papers ran in, so the subject can see what a topic actually represents in their record.
 
-A topic carrying fewer than three of the subject's papers is not proposed. If that leaves fewer than four topics, the count relaxes to two and the printout says the record is thin. Four to six topics is the working range, and six is the ceiling.
+A topic carrying fewer than three of the subject's papers is not proposed. If that leaves fewer than three topics, the count relaxes to two and the printout says the record is thin. `init` proposes at most three. Six is the ceiling a hand-edited config may carry, because a config written before that cap still describes a cohort that was really built, but three is what the tool offers: this is the choice that most shapes the cohort, and a list a person can read is a list they can judge.
 
 Someone one or two years into the clock may have almost nothing published under the new byline yet, which is too thin to name a subfield from. When the institution-anchored set holds fewer than five papers, the proposal widens, first to every article published since the appointment began regardless of byline, then to the whole publication record. Widening never happens silently: the basis is printed with the proposal. Only the topic proposal widens. The window itself, and every number computed from it, stays anchored on the institution byline.
 
@@ -58,6 +58,7 @@ Someone one or two years into the clock may have almost nothing published under 
 | Candidates | Authors with any of the topics, at least 10 works, affiliation in the configured countries, excluding the subject | US |
 | Core-topic share | Sum of topic shares over the configured topics | at least 0.4 |
 | University | At least one `education` affiliation | |
+| Peer institutions | Affiliated with one of the N institutions nearest the subject's in subfield output | off |
 | Plausible years | Byline years could contain a start inside the window | |
 | Career start | A confident first independent start could be estimated | |
 | Start in window | That estimate falls inside the cohort window | 2008 to 2018 |
@@ -67,6 +68,18 @@ Someone one or two years into the clock may have almost nothing published under 
 The subject is removed from their own pool: a distribution someone is being placed against should not contain them. The pool itself comes from one OpenAlex author query: any of the configured topics, more than nine works, and at least one affiliation in the configured countries. It is streamed to `data/pool.jsonl.gz` as it arrives, one person per line, and written through a temporary file so a file that exists is a file that finished. A pool holds names, so `data/` is never committed.
 
 The core-topic share is the main lever on cohort size, and the default is set from a measurement rather than from taste. On a six-topic materials-science subject, a pool of 82,601 US authors left 27,409 people at a share of 0.25, 4,738 at 0.4, and 836 at 0.5. A share of 0.25 admits anyone who does a quarter of their work in the subfield, which is most of a discipline rather than a peer group, and it makes the per-candidate stages that follow cost hours. Raise it for a tighter cohort, lower it for a broader one, and read the funnel to see what the change did.
+
+### 4.1 Peer institutions
+
+`peer_group_size` answers a narrower question than the default one: not "what do people in my subfield publish" but "what do people at schools like mine publish". It is off by default, because the first question is the one most people mean.
+
+There is no prestige ranking in OpenAlex, and the rankings people have in mind (US News, Carnegie tiers) are not open data this tool can redistribute. So a peer is defined by what the data supports: institutions are ordered by how many on-topic candidates they carry, the subject's institution is located in that order, and the peer group is the window of `peer_group_size` institutions sitting either side of it. The window slides rather than shrinks at either end, so the highest-output subject in a field gets a full group below them rather than half of one.
+
+This is a claim about output in one subfield, not about prestige. An institution that is famous for something else sits low in this order, which is right for this purpose and wrong for most others. The report says so rather than letting "peer" be read as a ranking.
+
+The ordering is computed from the screened candidates already in memory, not from a separate OpenAlex query, so the feature costs nothing against a daily budget the rest of the run is competing for.
+
+The cost is people, and it is steep. One materials-science cohort was 1091 people across 622 institutions, under two people per school. A peer group of 15 leaves something in the tens, which will not carry a p25 and a p75 that survive resampling. Below 100 people the run prints a warning naming the number. The tool does not refuse, because it is the user's cohort, but a quartile over a group that small moves whenever one person joins or leaves, and saying so is the same rule as refusing to compare citations at different horizons.
 
 The country rule is applied twice, once in the query and once locally, because a pool gathered under one config can be re-screened under another without refetching. The core-topic share is derived from the work counts on the author's topics. OpenAlex does not publish a per-author topic share: entries under `topics` carry `count` and no share, and the separate `topic_share` field is a different quantity, the author's share of that topic's global output, which for one person sums to about 0.001. Using it here would be a category error. The code reads a `share` field if one ever appears and falls back to counts, which is the path that runs today.
 
@@ -162,6 +175,28 @@ A per-venue table gives the share of the cohort's papers at each of the busiest 
 This approximates, cross-sectionally, the longitudinal design of Sekara, Deville, Andersen, Jones, Lehmann and Ahmadpoor, "The chaperone effect in scientific publishing", PNAS 2018 (doi 10.1073/pnas.1800471115). They followed authors through time and modelled the sequence of a career; here each person's window is one snapshot and the comparison is across roles within it. The direction of a difference is informative, its size is not comparable to theirs.
 
 Measured on one subfield cohort of 1,091: pooled top-quartile rate 25.4% on led papers and 28.1% on middle-author papers, a gap of 2.8% (95% CI 0.6% to 5.0%). Within person, across the 770 people with enough papers in both classes, the median rate was 18.2% on papers they led and 25.0% on papers they did not, with 393 people higher when not leading against 297 the other way (sign test p = 0.0003). Both readings point the same way.
+
+## 9.1 Outputs
+
+`run` writes `results/report.pdf` alongside the Markdown and CSV: a cover, the
+subject against the cohort as one panel per metric, the subfield's distribution
+at the comparison horizon with its confidence intervals, the funnel, the venue
+list, and the caveats. It is drawn with matplotlib rather than converted from
+the deck, because `slides.export_pdf` needs LibreOffice and the no-install
+Colab path cannot install it in a reasonable time.
+
+Each metric gets its own panel and its own scale. Putting a paper count and a
+journal impact on one shared axis means normalising them, and normalising hides
+the numbers a reader came for.
+
+The PDF is not text-scanned by the guardrail, and the reason is worth stating.
+matplotlib writes a string as a run of glyphs broken up by kerning, so a name
+can be present in the file and not findable as a substring: a scan would pass a
+split name and report a safety it had not checked. Instead the four input files
+are scanned before any page is drawn, and a violation refuses to produce a PDF
+at all. Every page comes from those files and from fixed prose in
+`tenuretrack/pdf_report.py`, whose wording is held to the descriptive rule by
+its own test.
 
 ## 10. Known limitations
 

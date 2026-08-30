@@ -35,7 +35,7 @@ from tenuretrack.figures import ACCENT, dot_and_range_chart, funnel_chart, venue
 from tenuretrack.guardrail import GuardrailViolation, assert_aggregates_only
 from tenuretrack.metrics import BENCHMARKS_CSV
 from tenuretrack.pool import FUNNEL_FILENAME
-from tenuretrack.report import SUBJECT_CSV
+from tenuretrack.report import SUBJECT_CSV, VENUES_CSV, load_venues
 
 __all__ = [
     "SlideData",
@@ -118,6 +118,11 @@ def load_slide_data(results: str | Path, config: Config) -> SlideData:
         if data.subject:
             data.career_year = int(data.subject[0]["career_year"])
             data.horizon = int(data.subject[0]["compared_at"])
+
+    # Reuses the report's own parser rather than a second one here: two
+    # readers of one file is how a deck and a report start disagreeing.
+    if (results / VENUES_CSV).exists():
+        data.venues = load_venues(results)
 
     chaperone_path = results / CHAPERONE_CSV
     if chaperone_path.exists():
