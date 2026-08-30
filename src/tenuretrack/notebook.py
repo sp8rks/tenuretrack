@@ -14,6 +14,7 @@ needs it.
 
 from __future__ import annotations
 
+import datetime as _dt
 import os
 import subprocess
 import sys
@@ -23,7 +24,7 @@ from pathlib import Path
 
 import yaml
 
-from tenuretrack.config import Config, ConfigError, Topic, load_config
+from tenuretrack.config import ORCID_RE, Config, ConfigError, Topic, load_config
 from tenuretrack.guardrail import assert_directory_aggregates_only
 from tenuretrack.openalex import (
     API_KEY_ENV_VAR,
@@ -41,6 +42,7 @@ __all__ = [
     "parse_selection",
     "prompt_for_api_key",
     "run_cli",
+    "check_details",
     "set_api_key",
     "set_peer_group",
     "set_mailto",
@@ -113,10 +115,75 @@ def set_mailto(address: str, env: MutableMapping[str, str] | None = None) -> str
 
     OpenAlex asks every caller to identify itself. The address is sent to
     OpenAlex and nowhere else, and it is never written into the repository.
+
+    An empty address raises `NotebookError` rather than letting the client's
+    own message through. That message tells the reader to `export
+    OPENALEX_MAILTO`, which is the right instruction in a terminal and a
+    baffling one in a notebook that has a box for it three lines above.
     """
+    address = (address or "").strip()
+    if not address:
+        raise NotebookError(
+            "your_email is empty. Type your work email into the your_email box "
+            "above and run this cell again. OpenAlex asks every caller to "
+            "identify itself, and politely identified callers get faster and "
+            "more reliable service. It goes to OpenAlex and nowhere else."
+        )
+    if "@" not in address or address.startswith("@") or address.endswith("@"):
+        raise NotebookError(
+            f"your_email does not look like an email address: {address!r}. "
+            "Check the your_email box above."
+        )
     env = os.environ if env is None else env
-    env[MAILTO_ENV_VAR] = (address or "").strip()
+    env[MAILTO_ENV_VAR] = address
     return mailto_from_env(env)
+
+
+def check_details(
+    *, email: str, orcid: str, university: str, start_year: object
+) -> str:
+    """Check every box in the details form at once, and say what is missing.
+
+    All of them at once on purpose. Validating one field per run means a person
+    with three empty boxes runs the cell three times and reads three different
+    errors, when the cell could have told them everything the first time.
+    """
+    problems: list[str] = []
+
+    if not (email or "").strip():
+        problems.append("your_email is empty")
+    elif "@" not in email:
+        problems.append(f"your_email does not look like an address: {email.strip()!r}")
+
+    cleaned = (orcid or "").strip().rsplit("/", 1)[-1]
+    if not cleaned:
+        problems.append("orcid is empty (get one free at orcid.org)")
+    elif not ORCID_RE.match(cleaned.upper()):
+        problems.append(
+            f"orcid should look like 0000-0002-1825-0097, not {cleaned!r}"
+        )
+
+    if not (university or "").strip():
+        problems.append("university is empty")
+
+    try:
+        year = int(start_year)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        problems.append(f"appointment_start_year is not a year: {start_year!r}")
+    else:
+        if not 1950 <= year <= _dt.date.today().year:
+            problems.append(
+                f"appointment_start_year {year} is not a plausible first year "
+                "of an appointment"
+            )
+
+    if problems:
+        raise NotebookError(
+            "Fill in the boxes above, then run this cell again:"
+            + chr(10)
+            + chr(10).join("  - " + problem for problem in problems)
+        )
+    return f"Looking up {orcid.strip()} at {university.strip()}."
 
 
 def prompt_for_api_key(
