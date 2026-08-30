@@ -37,6 +37,7 @@ __all__ = [
     "NotebookError",
     "describe_config",
     "keep_topics",
+    "plan_init",
     "list_results",
     "numbered_topics",
     "parse_selection",
@@ -259,6 +260,58 @@ def set_api_key(key: str, env: MutableMapping[str, str] | None = None) -> str:
         )
     env[API_KEY_ENV_VAR] = key
     return "OpenAlex key set, so the daily allowance is ten times the default."
+
+
+def plan_init(
+    path: str | Path = "benchmark.yaml", *, orcid: str, start_over: bool = False
+) -> tuple[bool, str]:
+    """Decide whether `init` should run, and refuse a silent subject switch.
+
+    A `benchmark.yaml` names the person it was built for. Rerunning the details
+    cell in a folder that already holds one has three meanings, and only one of
+    them is an error:
+
+    Same person, keep the file. `init` would overwrite the topic choices made
+    in step 5, so it is skipped and the reader is sent to step 4.
+
+    Same person, start again. `start_over` says so, and `init` runs.
+
+    A different person. This is the one worth stopping for. It happens when a
+    folder is reused for a second subject, and the failure is silent: the run
+    would go on to build a cohort for whoever the file already named, and the
+    report would look perfectly reasonable. So it raises, naming both.
+    """
+    path = Path(path)
+    wanted = (orcid or "").strip().rsplit("/", 1)[-1].upper()
+
+    if not path.exists():
+        return True, "Setting up " + wanted + "."
+    if start_over:
+        return True, "Starting over: " + str(path) + " will be rewritten."
+
+    try:
+        raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        existing = str((raw.get("subject") or {}).get("orcid") or "").strip().upper()
+        name = str((raw.get("subject") or {}).get("name") or "").strip()
+    except (OSError, yaml.YAMLError):
+        existing, name = "", ""
+
+    if existing and existing != wanted:
+        raise NotebookError(
+            "There is already a " + path.name + " in this folder, and it is for "
+            + (name + " (" + existing + ")" if name else existing)
+            + ", not " + wanted + ". Carrying on would build the cohort for "
+            "the wrong person and the report would look perfectly reasonable."
+            + chr(10) + chr(10)
+            + "Tick start_over to replace it, or go back to step 2 and change "
+            "folder_name so each person keeps their own folder."
+        )
+
+    return False, (
+        path.name + " is already set up for this ORCID, so the lookup was "
+        "skipped and your topic choices are intact. Carry on at step 4. Tick "
+        "start_over if you would rather begin again."
+    )
 
 
 def describe_config(path: str | Path) -> str:
