@@ -46,8 +46,24 @@ def test_set_mailto_puts_the_address_in_the_environment():
 
 @pytest.mark.parametrize("bad", ["", "   ", "not-an-email", "jane@university"])
 def test_set_mailto_rejects_anything_that_is_not_an_address(bad):
-    with pytest.raises(MailtoNotConfigured):
+    # NotebookError for the cases a notebook reader can act on, the client's
+    # own MailtoNotConfigured for the rest. Both refuse; the difference is who
+    # the message is written for.
+    with pytest.raises((NotebookError, MailtoNotConfigured)):
         set_mailto(bad, {})
+
+
+def test_an_empty_email_points_at_the_box_not_at_a_shell():
+    """The client's message says to `export OPENALEX_MAILTO`.
+
+    That is the right instruction in a terminal and a baffling one in a
+    notebook whose form has a box for it three lines above the failure.
+    """
+    with pytest.raises(NotebookError) as caught:
+        set_mailto("", {})
+    message = str(caught.value)
+    assert "your_email" in message
+    assert "export" not in message
 
 
 PLACEHOLDER_ADDRESSES = {"you@university.edu"}
@@ -526,3 +542,81 @@ def test_the_install_cell_names_exist_on_the_package():
 
     missing = [name for name in guarded if not hasattr(module, name)]
     assert not missing, f"the install cell checks for names that do not exist: {missing}"
+
+
+# --------------------------------------------------------- the details form
+
+
+def test_check_details_names_every_empty_box_at_once():
+    """Three empty boxes should cost one run, not three.
+
+    Validating one field per run means a person with three blanks runs the
+    cell three times and reads three different errors, when the cell could
+    have told them everything the first time.
+    """
+    from tenuretrack.notebook import check_details
+
+    with pytest.raises(NotebookError) as caught:
+        check_details(email="", orcid="", university="", start_year=2019)
+    message = str(caught.value)
+    assert "your_email" in message
+    assert "orcid" in message
+    assert "university" in message
+
+
+def test_check_details_accepts_a_filled_in_form():
+    from tenuretrack.notebook import check_details
+
+    line = check_details(
+        email="jane@university.edu",
+        orcid="0000-0002-1825-0097",
+        university="University of X",
+        start_year=2019,
+    )
+    assert "0000-0002-1825-0097" in line
+    assert "University of X" in line
+
+
+def test_check_details_takes_an_orcid_url_as_well_as_a_bare_id():
+    """People copy the URL from their ORCID page, because that is what it shows."""
+    from tenuretrack.notebook import check_details
+
+    assert check_details(
+        email="jane@university.edu",
+        orcid="https://orcid.org/0000-0002-1825-0097",
+        university="University of X",
+        start_year=2019,
+    )
+
+
+def test_check_details_rejects_an_orcid_that_is_not_one():
+    from tenuretrack.notebook import check_details
+
+    with pytest.raises(NotebookError) as caught:
+        check_details(
+            email="jane@university.edu",
+            orcid="1825-0097",
+            university="University of X",
+            start_year=2019,
+        )
+    assert "0000-0002-1825-0097" in str(caught.value), "show the shape wanted"
+
+
+@pytest.mark.parametrize("year", [1600, 2400, "soon", None])
+def test_check_details_rejects_an_implausible_start_year(year):
+    from tenuretrack.notebook import check_details
+
+    with pytest.raises(NotebookError):
+        check_details(
+            email="jane@university.edu",
+            orcid="0000-0002-1825-0097",
+            university="University of X",
+            start_year=year,
+        )
+
+
+def test_the_details_cell_checks_the_form_before_anything_slow():
+    """The check belongs before the key prompt and the network call."""
+    joined = notebook_source()
+    assert "check_details(" in joined
+    assert joined.index("check_details(") < joined.index("run_cli(\"init\"")
