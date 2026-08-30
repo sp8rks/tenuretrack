@@ -176,6 +176,28 @@ This approximates, cross-sectionally, the longitudinal design of Sekara, Deville
 
 Measured on one subfield cohort of 1,091: pooled top-quartile rate 25.4% on led papers and 28.1% on middle-author papers, a gap of 2.8% (95% CI 0.6% to 5.0%). Within person, across the 770 people with enough papers in both classes, the median rate was 18.2% on papers they led and 25.0% on papers they did not, with 393 people higher when not leading against 297 the other way (sign test p = 0.0003). Both readings point the same way.
 
+## 9.1 Outputs
+
+`run` writes `results/report.pdf` alongside the Markdown and CSV: a cover, the
+subject against the cohort as one panel per metric, the subfield's distribution
+at the comparison horizon with its confidence intervals, the funnel, the venue
+list, and the caveats. It is drawn with matplotlib rather than converted from
+the deck, because `slides.export_pdf` needs LibreOffice and the no-install
+Colab path cannot install it in a reasonable time.
+
+Each metric gets its own panel and its own scale. Putting a paper count and a
+journal impact on one shared axis means normalising them, and normalising hides
+the numbers a reader came for.
+
+The PDF is not text-scanned by the guardrail, and the reason is worth stating.
+matplotlib writes a string as a run of glyphs broken up by kerning, so a name
+can be present in the file and not findable as a substring: a scan would pass a
+split name and report a safety it had not checked. Instead the four input files
+are scanned before any page is drawn, and a violation refuses to produce a PDF
+at all. Every page comes from those files and from fixed prose in
+`tenuretrack/pdf_report.py`, whose wording is held to the descriptive rule by
+its own test.
+
 ## 10. Known limitations
 
 - Name disambiguation in OpenAlex is imperfect; the conservative identity filter biases the cohort toward distinctive names.

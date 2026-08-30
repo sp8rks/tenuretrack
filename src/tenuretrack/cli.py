@@ -26,9 +26,10 @@ from tenuretrack.openalex import (
     QuotaExhausted,
     mailto_from_env,
 )
+from tenuretrack.pdf_report import build_pdf_report
 from tenuretrack.peers import enough_people
 from tenuretrack.pool import build_pool
-from tenuretrack.report import build_report, load_venues
+from tenuretrack.report import build_report
 from tenuretrack.slides import build_slides, export_pdf, load_slide_data
 from tenuretrack.subject import InitError, format_result, initialize
 
@@ -300,6 +301,10 @@ def run(
         requests, hits = client.request_count, client.cache_hits
         budget = _budget_line(client)
 
+    # Next to the report that was actually written, not wherever the config
+    # points: the two must not be able to land in different directories.
+    build_pdf_report(report_path.parent, config, on_progress=typer.echo)
+
     result.funnel.write_csv(result.funnel_path)
     _echo_funnel(result.funnel)
     typer.echo(f"OpenAlex requests: {requests} (served from cache: {hits}){budget}")
@@ -355,8 +360,8 @@ def slides(
         )
         raise typer.Exit(code=EXIT_BAD_CONFIG)
 
-    data.venues = load_venues(results)
     deck = build_slides(data, results, on_progress=typer.echo)
+    build_pdf_report(results, config, on_progress=typer.echo)
     if pdf:
         export_pdf(deck, on_progress=typer.echo)
 

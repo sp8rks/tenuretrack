@@ -8,7 +8,7 @@ Give it your ORCID, your institution, and your start year. It builds a cohort of
 
 ## What you get
 
-A short report (Markdown, CSV, and a six-slide PPTX) containing:
+A short report (a PDF with the charts, plus Markdown, CSV, and a six-slide PPTX) containing:
 
 - **Subfield norms** through year N (p25 / median / p75): publications, lead-author publications, lead share, citations, h-index, median venue impact, share of papers in top-quartile venues
 - **You vs. cohort** at the same career year, with citations deliberately excluded (your papers have had 0 to N years to accrue citations; the cohort's have had 8 to 18)
