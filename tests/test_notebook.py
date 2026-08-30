@@ -372,3 +372,33 @@ def test_the_notebook_explains_why_the_extension_matters():
     prose = notebook_prose()
     assert "compared against people at year five" in prose
     assert "does not un-write what you published" in prose
+
+
+def test_every_code_cell_is_valid_python():
+    """A cell that does not parse fails on the reader's first run, not on ours.
+
+    The `\n` in a print call was flattened into a real newline by an editor
+    round-trip, which split the string literal across two lines and made the
+    details cell a SyntaxError. Nothing caught it, because the other tests read
+    the notebook as text and text has no opinion about whether it parses. The
+    notebook is the surface most people meet this tool through, so its cells
+    are held to compiling.
+    """
+    import ast
+    import json
+
+    nb = json.loads(NOTEBOOK.read_text(encoding="utf-8"))
+    for index, cell in enumerate(nb["cells"]):
+        if cell["cell_type"] != "code":
+            continue
+        source = "".join(cell["source"])
+        # Colab shell escapes and magics are not Python and never reach the parser.
+        stripped = "\n".join(
+            line
+            for line in source.splitlines()
+            if not line.lstrip().startswith(("!", "%"))
+        )
+        try:
+            ast.parse(stripped)
+        except SyntaxError as exc:  # pragma: no cover - the message is the point
+            pytest.fail(f"cell {index} does not parse: line {exc.lineno}, {exc.msg}")
