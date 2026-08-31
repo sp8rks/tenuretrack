@@ -15,7 +15,7 @@ This is a clean-room build. Do not reference, fetch, or assume anything from any
 - `.claude/skills/openalex-api`: how to call OpenAlex correctly (fields, filters, pagination, quota).
 - `.claude/skills/cohort-methodology`: the funnel, career-start estimation, metrics definitions.
 - `.claude/skills/aggregates-only`: the privacy guardrail. Non-negotiable.
-- `.claude/skills/deck-builder`: the six-slide report format.
+- `.claude/skills/deck-builder`: the slide format, its layout grid and its style rules.
 
 ## Hard rules
 
