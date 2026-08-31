@@ -16,13 +16,24 @@ from __future__ import annotations
 from importlib import resources
 from pathlib import Path
 
-__all__ = ["LOGO", "MARK", "logo_path"]
+__all__ = ["LOGO", "LOGO_DARK", "MARK", "MARK_DARK", "logo_path"]
 
 LOGO = "tenuretrack-logo.png"
 """The full lockup: the graphic over the wordmark. For a cover or a README."""
 
 MARK = "tenuretrack-mark.png"
 """The graphic alone, square. For anywhere the wordmark would be unreadable."""
+
+LOGO_DARK = "tenuretrack-logo-dark.png"
+MARK_DARK = "tenuretrack-mark-dark.png"
+"""The same two with the artwork's near-black swapped for a light ink.
+
+Half the artwork is a near-black navy: the first half of the wordmark, the
+road, the trend line and its dots. On a dark page that half disappears. These
+are for surfaces whose background follows the reader's theme, which means the
+README and the notebook. The report cover and the deck are drawn on white and
+always take the light pair.
+"""
 
 
 def logo_path(name: str = LOGO) -> Path | None:

@@ -1,42 +1,72 @@
 """Turn the source logo artwork into the assets the repo actually uses.
 
-The artwork arrives as a flat PNG on an almost-white background: 1254 by 1254,
-839 KB, and 19,394 distinct colours, nearly all of them one or two levels of
-noise around white. Dropped into a README or a slide as it is, it carries a
-white rectangle across whatever it sits on and costs most of a megabyte.
+The artwork arrives flat on an almost-white background: 1254 by 1254, 839 KB,
+and 19,394 distinct colours, nearly all of them a level or two of noise around
+white. Two things have to happen to it before it can sit on a page.
 
-This does three things and nothing else. It floods the background away from the
-four corners, which leaves the white dashes inside the road alone because they
-are enclosed by dark pixels and the flood never reaches them. It crops to the
-ink. It writes two sizes: the whole lockup, and the graphic on its own for the
-places a wordmark would be too wide to read.
+**Undo the white.** Not "flood the background away from the corners", which was
+the first attempt and was wrong twice over. It left every antialiased edge
+pixel fully opaque, so the artwork wore a white halo that is invisible on a
+white page and obvious on a dark one, and it could not reach the white inside
+the counters of the letters, so each `e` and `a` carried a white blob. What it
+has to do instead is treat white as the matte it is: recover each pixel's
+coverage from how far it sits from white, then divide the white back out to get
+the colour underneath. The road's dashes and the letter counters both become
+transparent, which is right on both themes, because on a light page they show
+white through and on a dark page they show dark.
 
-Run `make logo` after replacing the source artwork. Nothing else in the build
-depends on this script; the assets it writes are committed.
+**Make a second copy for dark mode.** Half this artwork is a near-black navy:
+the wordmark's first half, the road, the trend line and its dots. On a dark
+page that half disappears and the reader is left with a green `track` floating
+over some coloured bars. Undoing the white first is what makes the recolour
+possible, because after it every edge pixel carries its true colour rather than
+a blend with the background, so swapping navy for a light ink catches the edges
+too instead of leaving a dark fringe.
+
+Run `make logo` after replacing the source artwork.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from PIL import Image, ImageDraw
+import numpy as np
+from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "assets" / "tenuretrack-logo-source.png"
 ASSETS = ROOT / "src" / "tenuretrack" / "assets"
 """Written inside the package, not beside it.
 
-The Colab path pip-installs tenuretrack straight from GitHub, so a report
-built there can only reach a file that shipped in the wheel. The master
-artwork stays in `assets/` at the root, where it is not packaged: it is
-nearly a megabyte and nothing at runtime reads it.
+The Colab path pip-installs tenuretrack straight from GitHub, so a report built
+there can only reach a file that shipped in the wheel. The master artwork stays
+in `assets/` at the root, where it is not packaged: it is nearly a megabyte and
+nothing at runtime reads it.
 """
 
-FLOOD_SENTINEL = (255, 0, 255)
-"""A colour the artwork does not contain, so the fill can be found again."""
+OPAQUE_BELOW = 215.0
+CLEAR_ABOVE = 250.0
+"""The luminance band the artwork's edges live in.
 
-FLOOD_TOLERANCE = 30
-"""Wide enough to swallow the near-white noise, narrow enough to stop at ink."""
+Measured on the source, whose histogram is close to two spikes: 1,427,387
+pixels above 248 and 135,490 below 215, with about 9,600 in between. So the
+band is exactly the antialiased fringe, and the ramp across it touches neither
+the ink nor the background.
+"""
+
+NAVY = np.array([25.0, 37.0, 53.0])
+"""The artwork's near-black, measured as the mean of everything under lum 60."""
+
+NAVY_SOLID = 70.0
+NAVY_EDGE = 110.0
+"""Colour distances from NAVY: swapped outright, then faded out by NAVY_EDGE.
+
+The teal sits 123 away, so this separates the navy family from the artwork's
+own colours without anyone drawing a mask by hand.
+"""
+
+DARK_MODE_INK = np.array([227.0, 233.0, 241.0])
+"""What the navy becomes on a dark page. Cool, to stay in family with the bars."""
 
 LOCKUP_WIDTH = 1200
 MARK_SIDE = 512
@@ -50,20 +80,54 @@ one-pixel rows between the dot of an i and its stem.
 """
 
 
-def _drop_background(image: Image.Image) -> Image.Image:
-    """Make the outer background transparent, from the corners inward."""
-    flat = image.convert("RGB")
-    width, height = flat.size
-    for corner in ((0, 0), (width - 1, 0), (0, height - 1), (width - 1, height - 1)):
-        ImageDraw.floodfill(flat, corner, FLOOD_SENTINEL, thresh=FLOOD_TOLERANCE)
+def _unmatte(image: Image.Image) -> np.ndarray:
+    """Recover colour and coverage from artwork painted onto white.
 
-    out = flat.convert("RGBA")
-    pixels = out.load()
-    for y in range(height):
-        for x in range(width):
-            if pixels[x, y][:3] == FLOOD_SENTINEL:
-                pixels[x, y] = (255, 255, 255, 0)
+    Every pixel is read as `seen = a * ink + (1 - a) * white`. Coverage comes
+    from luminance, which is monotonic in `a` for any ink darker than the
+    background and which the two-spike histogram makes reliable here. Then the
+    background is divided back out, so a half-covered edge pixel comes back as
+    the ink's own colour at half alpha rather than as a pale version of it at
+    full alpha. That is the whole difference between artwork that composites
+    onto any background and artwork that only works on the one it was drawn on.
+    """
+    rgb = np.asarray(image.convert("RGB"), dtype=float)
+    luminance = rgb @ np.array([0.299, 0.587, 0.114])
+
+    alpha = (CLEAR_ABOVE - luminance) / (CLEAR_ABOVE - OPAQUE_BELOW)
+    np.clip(alpha, 0.0, 1.0, out=alpha)
+
+    # Divide the white matte back out. Guarded, because at alpha 0 the pixel is
+    # background and there is no colour underneath to recover.
+    covered = alpha > 0.004
+    safe = np.where(covered, alpha, 1.0)[:, :, None]
+    ink = (rgb - 255.0 * (1.0 - safe)) / safe
+    np.clip(ink, 0.0, 255.0, out=ink)
+
+    out = np.zeros((*rgb.shape[:2], 4), dtype=float)
+    out[:, :, :3] = np.where(covered[:, :, None], ink, 255.0)
+    out[:, :, 3] = alpha * 255.0
     return out
+
+
+def _for_dark_mode(rgba: np.ndarray) -> np.ndarray:
+    """Swap the artwork's near-black for a light ink, edges included.
+
+    Works on straight colour, which is why `_unmatte` has to run first. On the
+    original an edge between the navy and the page is a pale blend that no
+    threshold catches, and swapping only the solid centres would leave every
+    letter and the whole road outlined in the colour being removed.
+    """
+    out = rgba.copy()
+    distance = np.linalg.norm(out[:, :, :3] - NAVY, axis=2)
+    weight = np.clip((NAVY_EDGE - distance) / (NAVY_EDGE - NAVY_SOLID), 0.0, 1.0)
+    weight = np.where(out[:, :, 3] > 0, weight, 0.0)[:, :, None]
+    out[:, :, :3] = out[:, :, :3] * (1.0 - weight) + DARK_MODE_INK * weight
+    return out
+
+
+def _image(rgba: np.ndarray) -> Image.Image:
+    return Image.fromarray(np.rint(rgba).astype(np.uint8), mode="RGBA")
 
 
 def _trim(image: Image.Image, pad: int = PAD) -> Image.Image:
@@ -120,7 +184,7 @@ def _square(image: Image.Image, side: int) -> Image.Image:
 def _compact(image: Image.Image) -> Image.Image:
     """Cut the palette down where it costs nothing visible.
 
-    The artwork is flat colour with antialiased edges, and it arrived carrying
+    The artwork is flat colour with antialiased edges and it arrived carrying
     19,394 distinct colours, almost all of them noise around white. 255 of them
     render the same and store in a fraction of the space. Fast octree because
     it is the only method Pillow will run on an image with an alpha channel,
@@ -129,24 +193,31 @@ def _compact(image: Image.Image) -> Image.Image:
     return image.quantize(colors=255, method=Image.FASTOCTREE, dither=Image.NONE)
 
 
+def _write(image: Image.Image, path: Path) -> Path:
+    _compact(image).save(path, optimize=True)
+    return path
+
+
 def main() -> None:
     ASSETS.mkdir(parents=True, exist_ok=True)
-    source = Image.open(SOURCE)
-    clean = _trim(_drop_background(source))
+    straight = _unmatte(Image.open(SOURCE))
 
-    lockup = clean.resize(
-        (LOCKUP_WIDTH, round(clean.height * LOCKUP_WIDTH / clean.width)),
-        Image.LANCZOS,
-    )
-    lockup_path = ASSETS / "tenuretrack-logo.png"
-    _compact(lockup).save(lockup_path, optimize=True)
+    written = []
+    for suffix, rgba in (("", straight), ("-dark", _for_dark_mode(straight))):
+        clean = _trim(_image(rgba))
+        lockup = clean.resize(
+            (LOCKUP_WIDTH, round(clean.height * LOCKUP_WIDTH / clean.width)),
+            Image.LANCZOS,
+        )
+        written.append(_write(lockup, ASSETS / f"tenuretrack-logo{suffix}.png"))
+        written.append(
+            _write(
+                _square(_split_mark(clean), MARK_SIDE),
+                ASSETS / f"tenuretrack-mark{suffix}.png",
+            )
+        )
 
-    mark_path = ASSETS / "tenuretrack-mark.png"
-    _compact(_square(_split_mark(clean), MARK_SIDE)).save(
-        mark_path, optimize=True
-    )
-
-    for path in (lockup_path, mark_path):
+    for path in written:
         with Image.open(path) as done:
             print(f"{path.relative_to(ROOT)}  {done.size[0]}x{done.size[1]}  "
                   f"{path.stat().st_size // 1024} KB")

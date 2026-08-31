@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="src/tenuretrack/assets/tenuretrack-logo.png" alt="tenuretrack" width="340">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="src/tenuretrack/assets/tenuretrack-logo-dark.png">
+    <img src="src/tenuretrack/assets/tenuretrack-logo.png" alt="tenuretrack" width="340">
+  </picture>
 </p>
 
 <p align="center"><strong>Nobody tells assistant professors the numbers. This tool computes them.</strong></p>
