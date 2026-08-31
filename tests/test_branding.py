@@ -12,16 +12,20 @@ from __future__ import annotations
 import tomllib
 from pathlib import Path
 
+import numpy as np
 import pytest
+from PIL import Image
 
 from tenuretrack import branding
-from tenuretrack.branding import LOGO, MARK, logo_path
+from tenuretrack.branding import LOGO, LOGO_DARK, MARK, MARK_DARK, logo_path
 
 ROOT = Path(__file__).resolve().parents[1]
 
+ALL_ASSETS = (LOGO, MARK, LOGO_DARK, MARK_DARK)
 
-def test_both_assets_ship_with_the_package():
-    for name in (LOGO, MARK):
+
+def test_every_asset_ships_with_the_package():
+    for name in ALL_ASSETS:
         path = logo_path(name)
         assert path is not None, f"{name} is not installed with the package"
         assert path.is_file()
@@ -60,7 +64,7 @@ def test_the_source_artwork_is_not_packaged():
     assert logo_path("tenuretrack-logo-source.png") is None
 
 
-@pytest.mark.parametrize("name", [LOGO, MARK])
+@pytest.mark.parametrize("name", ALL_ASSETS)
 def test_the_shipped_assets_stay_small(name):
     """They are drawn onto every report and deck, and they are committed.
 
@@ -69,3 +73,82 @@ def test_the_shipped_assets_stay_small(name):
     commits a raw export over the top.
     """
     assert logo_path(name).stat().st_size < 150_000
+
+
+# ------------------------------------------------------- light and dark themes
+
+
+def _pixels(name: str) -> np.ndarray:
+    return np.asarray(Image.open(logo_path(name)).convert("RGBA"), dtype=float)
+
+
+def _luminance(pixels: np.ndarray) -> np.ndarray:
+    return pixels[:, :, :3] @ [0.299, 0.587, 0.114]
+
+
+@pytest.mark.parametrize("name", [LOGO, MARK])
+def test_no_opaque_white_survives_in_the_light_pair(name):
+    """The bug a white page hides and a dark page shows.
+
+    Flooding the background in from the corners left every antialiased edge
+    pixel fully opaque, so the artwork wore a white halo, and the flood could
+    not reach the white enclosed by the letters, so each `e` and `a` carried a
+    white blob. Both are invisible against white and obvious against #0d1117.
+    The fix is to treat white as the matte it is and recover coverage from it.
+    This is the assertion that says it stayed fixed.
+
+    The dark pair is light ink by design and is checked on its own below.
+    """
+    pixels = _pixels(name)
+    opaque_white = (pixels[:, :, 3] > 200) & (_luminance(pixels) > 235)
+    assert opaque_white.sum() == 0, (
+        f"{name} carries {int(opaque_white.sum())} opaque near-white pixels, "
+        "which will read as halos and blobs on a dark background"
+    )
+
+
+@pytest.mark.parametrize(
+    ("light", "dark"), [(LOGO, LOGO_DARK), (MARK, MARK_DARK)]
+)
+def test_the_dark_variant_lightens_the_ink_that_would_vanish(light, dark):
+    """Half the artwork is a near-black navy, and a dark page swallows it.
+
+    Compares the mean luminance of the opaque pixels in each. The dark
+    variant has to be substantially lighter, or it is the light one under
+    another name and the README fix does nothing.
+    """
+
+    def mean_ink_luminance(name: str) -> float:
+        pixels = _pixels(name)
+        return float(np.mean(_luminance(pixels)[pixels[:, :, 3] > 200]))
+
+    assert mean_ink_luminance(dark) > mean_ink_luminance(light) + 40
+
+
+@pytest.mark.parametrize("name", [LOGO_DARK, MARK_DARK])
+def test_the_dark_variant_keeps_the_road_markings_open(name):
+    """The dashes and the letter counters are holes, not white paint.
+
+    That is what lets one drawing work on both themes: on a light page the
+    holes show white and on a dark page they show dark. If they were ever
+    filled in, the dark variant would be a light road with invisible
+    markings and letters with solid middles.
+    """
+    pixels = _pixels(name)
+    assert (pixels[:, :, 3] < 20).any(), f"{name} has no transparent pixels at all"
+
+
+def test_the_readme_offers_both_to_the_browser():
+    """A plain <img> is what put a near-black wordmark on a near-black page."""
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    assert "prefers-color-scheme: dark" in readme
+    assert LOGO_DARK in readme
+    assert LOGO in readme
+
+
+def test_the_notebook_offers_both_to_the_browser():
+    notebook = (ROOT / "notebooks" / "tenuretrack_colab.ipynb").read_text(
+        encoding="utf-8"
+    )
+    assert "prefers-color-scheme: dark" in notebook
+    assert LOGO_DARK in notebook
