@@ -12,6 +12,7 @@ import datetime as _dt
 
 import pytest
 from pptx import Presentation
+from pptx.enum.shapes import MSO_SHAPE_TYPE
 
 from tenuretrack.config import build_config
 from tenuretrack.figures import (
@@ -370,3 +371,32 @@ def test_an_uncompared_metric_is_drawn_with_no_marker_at_all(tmp_path):
     )
     assert accent_pixels(uncompared) == 0, "an uncompared row must draw no marker"
     assert accent_pixels(compared) > 0, "a compared row must draw one"
+
+
+def test_the_logo_lands_on_the_title_slide_and_nowhere_else(tmp_path, config_dict):
+    """Attribution once, not furniture on all eight.
+
+    The charts are pictures too, so this counts pictures per slide rather than
+    across the deck: the title slide carries no chart, so its one picture is
+    the logo.
+    """
+    data, results = data_for(tmp_path, config_dict)
+    slides = Presentation(build_slides(data, results)).slides
+    pictures = [
+        sum(1 for shape in slide.shapes if shape.shape_type == MSO_SHAPE_TYPE.PICTURE)
+        for slide in slides
+    ]
+    assert pictures[0] == 1
+
+
+def test_a_deck_still_builds_when_the_logo_is_missing(tmp_path, config_dict, monkeypatch):
+    """An install stripped of its assets loses a mark, not a deck."""
+    monkeypatch.setattr("tenuretrack.slides.logo_path", lambda name=None: None)
+    data, results = data_for(tmp_path, config_dict)
+    deck = build_slides(data, results)
+    slides = Presentation(deck).slides
+    assert len(slides) == 8
+    assert not [
+        shape for shape in slides[0].shapes
+        if shape.shape_type == MSO_SHAPE_TYPE.PICTURE
+    ]

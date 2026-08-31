@@ -30,13 +30,13 @@ Margin is 0.62in on both sides. Content is either full width, or a chart plus a 
 
 ## Slides
 
-1. **Title.** Accent bar down the left edge. Subject name at 40pt, subfield and institution, the subject's own career year and the comparison year, four stat tiles (cohort size, comparison year, cohort start window, topic count) matching the report's cover, the "not a standard" paragraph, date and OpenAlex attribution.
+1. **Title.** Accent bar down the left edge. Subject name at 40pt, subfield and institution, the subject's own career year and the comparison year, four stat tiles (cohort size, comparison year, cohort start window, topic count) matching the report's cover, the "not a standard" paragraph, date and OpenAlex attribution, and the logo in the top right corner, on this slide alone: repeated on all eight it would read as furniture rather than as attribution. `branding.logo_path` returns None on an install without the asset, and every caller draws nothing rather than failing.
 2. **Where this record sits.** One row per metric: a band from cohort p25 to p75 drawn the same length whatever the units, median tick, subject diamond, quartile figures above the band and the position words to the right. Citations get a band and no diamond. Rows, not per-metric panels: panels on their own vertical scales give no shared baseline.
 3. **Year by year.** Small multiples, one panel per metric, p25-to-p75 ribbon and median across every career year, subject marked at the horizon. Uses the quartiles the pipeline already computes at every year.
 4. **The cohort's numbers.** Table at the comparison horizon, p25 / median / p75 with the bootstrap interval under each figure in smaller muted type, plus a "how to read a row" side panel.
 5. **How the cohort was built.** Funnel on a log x-axis with the share of the step above that each filter kept, plus a side panel naming the topics and what the cohort is and is not.
 6. **Venues.** The busiest venues by window paper count with impact in brackets, top-quartile ones in the cohort colour, and a second panel giving the share of each venue's papers the cohort led.
-7. **Led against co-authored.** Pooled top-quartile rate by role beside the paired within-person medians, with the gap and its interval stated in words. Omitted entirely when the chaperone pass has not run.
+7. **The chaperone effect.** Pooled top-quartile rate by role beside the paired within-person medians, with the gap and its interval stated in words. The takeaway names the effect and says what it is, because a reader who has not read Sekara et al. cannot read two bar charts of roles without it. Omitted entirely when the chaperone pass has not run.
 8. **What this cannot see.** Six limits in two columns, each an accent tick, a bold claim and a muted sentence, closing on a panel pointing at `docs/methods.md` and `results/`.
 
 ## Style

@@ -410,16 +410,39 @@ def test_the_chaperone_finding_lands_under_the_venue_table(tmp_path, config_dict
         chaperone=["Across every paper the cohort wrote, it went better.",
                    "Comparing the same 770 people against themselves, and so on."],
     ).read_text(encoding="utf-8")
-    assert "Who led the papers that reached those venues" in text
-    assert text.index("| Venue |") < text.index("Who led the papers")
-    assert text.index("Who led the papers") < text.index("How the cohort was built")
+    heading = "### The chaperone effect: who led the papers that reached those venues"
+    assert heading in text
+    assert text.index("| Venue |") < text.index(heading)
+    assert text.index(heading) < text.index("How the cohort was built")
     assert "10.1073/pnas.1800471115" in text
     # The footer pointer is the fallback for a run without the pass, and would
     # be a second, weaker mention of something the body now carries.
     assert "asks a second question" not in text
 
 
+def test_the_chaperone_section_says_what_the_effect_is(tmp_path, config_dict):
+    """A reader who has not read Sekara et al. has to learn it here.
+
+    The section used to cite the paper and never say what it claimed, which
+    left the two percentages sitting under a venue table with nothing
+    explaining why they were next to it.
+    """
+    text = written_report(
+        tmp_path, config_dict,
+        chaperone=["Across every paper the cohort wrote, it went better."],
+    ).read_text(encoding="utf-8")
+    assert "chaperone effect" in text
+    # The definition, and the reason it sits under this table in particular.
+    assert "through an established collaborator rather than through their own lab" in text
+    assert "cannot tell those two routes apart" in text
+    # Descriptive to the end: the section says outright that it prescribes
+    # nothing, because a reader could otherwise take it as advice on authorship.
+    assert "Nothing in it says who should lead what." in text
+
+
 def test_without_the_pass_the_report_still_points_at_it(tmp_path, config_dict):
     text = written_report(tmp_path, config_dict).read_text(encoding="utf-8")
-    assert "Who led the papers that reached those venues" not in text
+    assert "who led the papers that reached those venues" not in text
     assert "asks a second question" in text
+    # Still named, so a reader who wants it knows what to search for.
+    assert "chaperone effect" in text

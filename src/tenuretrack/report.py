@@ -488,18 +488,50 @@ def write_report(
     if chaperone:
         lines += [
             "",
-            "### Who led the papers that reached those venues",
+            "### The chaperone effect: who led the papers that reached those "
+            "venues",
+            "",
+            "A paper in one of the journals above arrives by one of two routes. "
+            "Either the person's own group wrote it and sent it, or the person "
+            "was a co-author on a paper that somebody else's group led. Sekara "
+            "et al. named the second route the chaperone effect: for a great "
+            "many researchers, the first appearance in a selective venue comes "
+            "through an established collaborator rather than through their own "
+            "lab.",
+            "",
+            "The venue table cannot tell those two routes apart, and neither "
+            "can the share-in-top-quartile-venues row near the top of this "
+            "report. Both count a paper the same way whoever led it. The two "
+            "readings below are the closest this report comes to separating "
+            "them, for the cohort and not for any one person in it.",
             "",
         ]
         for sentence in chaperone:
             lines += [sentence, ""]
         lines += [
-            "This follows Sekara et al., PNAS 2018 (doi "
-            "10.1073/pnas.1800471115), which found that a route into a "
-            "prestigious venue often runs through a senior co-author. The whole "
-            "of it, including the venue-by-venue breakdown and what the "
-            "approximation does and does not support, is in `chaperone.md` and "
-            "on its own page in `report.pdf`.",
+            "Those two readings answer different questions and are both here "
+            "because either one alone misleads. The first is pooled over "
+            "papers, so whoever wrote the most of them carries it. The second "
+            "sets each person against themselves, which cancels out field, "
+            "institution, career stage and how prolific someone is, and drops "
+            "anyone without enough papers in both roles. Where the two "
+            "disagree, that disagreement is the finding.",
+            "",
+            "This is a cross-sectional approximation of Sekara, Deville, "
+            "Andersen, Jones, Lehmann and Ahmadpoor, \"The chaperone effect in "
+            "scientific publishing\", PNAS 2018 (doi "
+            "10.1073/pnas.1800471115). They followed authors through time. Here "
+            "each person's window is a single snapshot and the comparison runs "
+            "across roles inside it, so the direction of a difference is "
+            "informative and its size is not comparable to theirs. Where a "
+            "field does not order authors by contribution, none of it applies.",
+            "",
+            "Nothing in it says who should lead what. It is a description of "
+            "how one group of papers was authored, and a piece of context for "
+            "reading the venue list above. The whole pass, including which "
+            "journals the cohort leads in and which it mostly co-authors its "
+            "way into, is in `chaperone.md` and on its own page in "
+            "`report.pdf`.",
         ]
 
     lines += [
@@ -556,9 +588,10 @@ def write_report(
         # Before the method line, not after it: the closing citation is the last
         # thing on the page or it is not a closing line.
         lines[-2:-2] = [
-            "`chaperone.md` asks a second question of the same cohort: when one "
-            "of these papers reached a top-quartile venue, was the person "
-            "leading it or co-authoring it? That page is also in `report.pdf`.",
+            "`chaperone.md` asks a second question of the same cohort, the one "
+            "Sekara et al. called the chaperone effect: when one of these "
+            "papers reached a top-quartile venue, was the person leading it or "
+            "co-authoring it? That page is also in `report.pdf`.",
             "",
         ]
 

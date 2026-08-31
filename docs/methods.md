@@ -178,7 +178,9 @@ Two readings are reported, because either alone misleads.
 
 Where the two disagree, the disagreement is the finding and the report says so.
 
-Both readings are summarised in two sentences under the venue table in `report.md`, because that is where they change a reading: a list of top-quartile journals invites the inference that a paper in one came out of the author's own group, and this is the number that says how often it did. `chaperone.md` and the matching page in `report.pdf` carry the whole of it.
+Both readings are summarised under the venue table in `report.md`, in a section headed "The chaperone effect", because that is where they change a reading: a list of top-quartile journals invites the inference that a paper in one came out of the author's own group, and this is the number that says how often it did. `chaperone.md` and the matching page in `report.pdf` carry the whole of it.
+
+The effect is named and defined in every place it appears, rather than cited and left for the reader to look up. A reader who has not read Sekara et al. needs to be told what the claim is before two percentages under a venue table mean anything, and the section says outright that it prescribes nothing about who should lead what: it is context for reading the venue list, and a reader could otherwise take it as advice on authorship order.
 
 A per-venue table gives the share of the cohort's papers at each of the busiest venues that the cohort led, which names venues and never people. The same share is drawn beside the paper counts on the venue page of `report.pdf`, because a journal a subfield publishes in constantly but rarely leads in is a different kind of venue from one it leads in half the time.
 

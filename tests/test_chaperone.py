@@ -521,7 +521,7 @@ def test_the_rebuilt_inputs_drive_the_same_analysis(tmp_path, config_dict):
     )
     assert csv_path.name == CHAPERONE_CSV
     assert md_path.name == CHAPERONE_MD
-    assert md_path.read_text(encoding="utf-8").startswith("# Who leads")
+    assert md_path.read_text(encoding="utf-8").startswith("# The chaperone effect")
     assert gap is not None and paired is not None
 
 
