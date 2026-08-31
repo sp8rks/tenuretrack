@@ -56,11 +56,12 @@ they disagree.
 
 | File | What it holds |
 |---|---|
-| `report.md` | The subject against the cohort, the venue table, the funnel, the caveats |
+| `report.pdf` | The whole report with the charts. This is the one to open first |
+| `report.md` | The same report as text: the subject against the cohort, the clock year by year, the venue table, the funnel, the caveats |
 | `benchmarks.md`, `benchmarks.csv` | Cohort quartiles per metric per career year, with bootstrap intervals |
-| `chaperone.md`, `chaperone.csv` | Top-quartile venue rates by authorship role |
+| `chaperone.md`, `chaperone.csv` | Top-quartile venue rates by authorship role, pooled and within each person. Also a page in `report.pdf` |
 | `funnel.csv` | How many people each filter removed |
-| `subject.csv`, `venues.csv` | Machine-readable inputs to the deck |
+| `subject.csv`, `venues.csv` | Machine-readable inputs to the deck and the PDF |
 | `taylor-d-sparks.pptx` | The six-slide deck |
 | `figures/` | The charts, shared by the deck and the report |
 

@@ -36,8 +36,17 @@ class SlideData:
     subject: list[dict] = field(default_factory=list)
     venues: list[tuple[str, int, float | None, bool]] = field(default_factory=list)
     role_rates: list[tuple[str, float | None]] = field(default_factory=list)
+    role_counts: dict[str, tuple[int, int]] = field(default_factory=dict)
+    gap: tuple[float, float | None, float | None] | None = None
+    paired: dict[str, float] = field(default_factory=dict)
+    venue_led_share: dict[str, float] = field(default_factory=dict)
     career_year: int = 1
     horizon: int = 6
+
+    @property
+    def has_chaperone(self) -> bool:
+        """Whether `tenuretrack run` was asked for the led-versus-co-authored pass."""
+        return bool(self.role_rates)
 
     @property
     def cohort_size(self) -> int:
@@ -98,9 +107,23 @@ def load_slide_data(results: str | Path, config: Config) -> SlideData:
             "first_not_led": "First, not leading",
             "middle": "Middle author",
         }
+        # Every section, not only the pooled rates. The PDF draws the paired
+        # comparison and the interval on the gap beside them, and a reader who
+        # sees one without the others gets the weaker half of the finding.
         for row in csv.DictReader(chaperone_path.read_text(encoding="utf-8").splitlines()):
-            if row["section"] == "pooled_rate":
-                data.role_rates.append(
-                    (labels.get(row["key"], row["key"]), _float(row["value"]))
+            section, key = row["section"], row["key"]
+            value = _float(row["value"])
+            if section == "pooled_rate":
+                data.role_rates.append((labels.get(key, key), value))
+                data.role_counts[labels.get(key, key)] = (
+                    int(row["people"] or 0),
+                    int(row["papers"] or 0),
                 )
+            elif section == "gap" and value is not None:
+                data.gap = (value, _float(row["low"]), _float(row["high"]))
+            elif section == "paired" and value is not None:
+                data.paired[key] = value
+                data.paired.setdefault("people", float(row["people"] or 0))
+            elif section == "venue" and value is not None:
+                data.venue_led_share[key] = value
     return data

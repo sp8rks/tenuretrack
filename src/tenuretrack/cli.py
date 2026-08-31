@@ -325,6 +325,12 @@ def run(
         f"Wrote {report_path.name}: {config.subject.name} at career year "
         f"{horizon}, {subject.pubs} articles and {subject.led} led."
     )
+    typer.echo("")
+    typer.echo(
+        f"Start with {report_path.parent / 'report.pdf'}. It has the charts, the "
+        "funnel and the limits in one document. `tenuretrack slides` turns the "
+        "same numbers into a deck."
+    )
 
 
 def _echo_funnel(funnel) -> None:

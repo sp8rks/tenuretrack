@@ -295,6 +295,33 @@ def _metric(key: str):
     raise KeyError(key)
 
 
+def _clock_table(rows: Sequence[Quartiles], horizon: int) -> list[str]:
+    """Medians for every metric at every career year, as one small table.
+
+    `benchmarks.md` already has a full table per metric with intervals. This is
+    the one-screen version: it answers "what did year three look like" without
+    making the reader open a second file and hold six tables in their head.
+    """
+    years = sorted({r.horizon for r in rows if r.horizon <= horizon})
+    if len(years) < 2:
+        return []
+    by_key = {(r.metric, r.horizon): r for r in rows}
+    lines = [
+        "| Cohort median | " + " | ".join(f"Year {y}" for y in years) + " |",
+        "|---|" + "---|" * len(years),
+    ]
+    for metric in METRICS:
+        cells = []
+        for year in years:
+            quartiles = by_key.get((metric.key, year))
+            withheld = quartiles is None or quartiles.suppressed
+            cells.append(
+                "withheld" if withheld else _fmt(quartiles.p50, metric.decimals)
+            )
+        lines.append(f"| {metric.label} | " + " | ".join(cells) + " |")
+    return lines
+
+
 def write_report(
     path: str | Path,
     *,
@@ -319,9 +346,9 @@ def write_report(
     lines = [
         f"# {subject.name} against {label}, at career year {horizon}",
         "",
-        f"{subject.name} began a tenure-line appointment at "
-        f"{subject.institution_name} in {subject.start_year}, which makes this "
-        f"calendar year {career_year} of the appointment.",
+        f"{subject.name} started a tenure-line appointment at "
+        f"{subject.institution_name} in {subject.start_year} and is now in year "
+        f"{career_year} of it.",
     ]
     if extension:
         window_end = subject.start_year + horizon + extension - 1
@@ -342,9 +369,9 @@ def write_report(
         )
     if career_year > horizon:
         lines.append(
-            f"The cohort is compared at year {horizon}, the end of the benchmark "
-            "window, because comparing a longer record against a shorter one "
-            "would credit the extra years to one side."
+            f"That is longer than the cohort's window, so both sides are read at "
+            f"year {horizon}: a {career_year}-year record set against a "
+            f"{horizon}-year one would credit the extra years to one side."
         )
     lines += [
         "",
@@ -368,9 +395,20 @@ def write_report(
         "standard, nobody in the cohort agreed to be measured, and no part of "
         "this says what any one career should look like.",
         "",
+        "This file is the whole story in text. `report.pdf` is the same story "
+        "with the charts, `benchmarks.md` has every year of the clock in full, "
+        "and the CSVs beside them hold the same numbers for anything that wants "
+        "to read them.",
+        "",
         f"## {subject.name} and the cohort at year {horizon}",
         "",
-        "| | This record | Cohort p25 | Cohort median | Cohort p75 | Position |",
+        "A quarter of the cohort sat below p25, half sat below the median, and "
+        "a quarter sat above p75. The last column says which of those stretches "
+        "this record falls in. It is a location in a distribution and nothing "
+        "more.",
+        "",
+        f"| Through year {horizon} | This record | Cohort p25 | Cohort median | "
+        "Cohort p75 | Where it falls |",
         "|---|---|---|---|---|---|",
     ]
 
@@ -393,29 +431,43 @@ def write_report(
         "",
         "### Why citations have no position",
         "",
-        "The cohort's papers in this window are eight to eighteen years old. "
-        f"{subject.name}'s are at most {horizon}. Citations accumulate with time, "
-        "so placing one count against the other would measure the calendar rather "
-        "than the work. The count is shown because it is worth knowing, and left "
-        "unplaced because the comparison would not mean anything.",
+        "The cohort's papers in this window are eight to eighteen years old and "
+        f"{subject.name}'s are at most {horizon}. Citations accumulate with "
+        "time, so setting one count against the other would measure the calendar "
+        "rather than the work. The count is here because it is worth knowing, "
+        "and unplaced because the comparison would not mean anything.",
         "",
-        "## What the subfield publishes in",
+        f"## The cohort year by year, up to year {horizon}",
+        "",
+        "The same cohort, measured at the end of each career year. This is the "
+        "row to read if the record being compared is earlier on the clock, and "
+        "it is also where a sudden jump or a flat stretch in a subfield shows "
+        "up. Quartiles and confidence intervals for every year are in "
+        "`benchmarks.md`.",
+        "",
+    ]
+    lines += _clock_table(rows, horizon)
+
+    lines += [
+        "",
+        "## Where the subfield publishes",
         "",
         "The journals the cohort used most, so that \"top-quartile venue\" can be "
         "checked against titles rather than taken on trust. Impact is "
-        "`2yr_mean_citedness` from OpenAlex, and the quartile is computed inside "
-        "this cohort.",
+        "`2yr_mean_citedness` from OpenAlex, a property of the journal and not "
+        "of any paper in it, and the quartile is computed inside this cohort "
+        "rather than against a global ranking.",
         "",
         "| Venue | Cohort papers | Impact | Top quartile |",
         "|---|---|---|---|",
     ]
     venue_note = (
-        "Read this list before trusting the counts above. Some conference "
+        "Read this list before trusting the counts above it. Some conference "
         "abstract series carry an ISSN and are typed as journals by OpenAlex, "
-        "so they are indistinguishable from a journal in the data and are "
-        "counted as articles here. A venue near the top of this table with an "
-        "impact near zero is usually one of them, and every count in this "
-        "report includes it."
+        "so they cannot be told apart from a journal in the data and are counted "
+        "as articles here. A venue near the top of this table with an impact "
+        "near zero is usually one of them, and every count in this report "
+        "includes it."
     )
     for name, count, impact, is_top in venues:
         lines.append(
@@ -429,18 +481,24 @@ def write_report(
         "",
         "## How the cohort was built",
         "",
+        "Every filter, in the order it ran, and how many people it left. This is "
+        "the table to check when a cohort looks wrong: a step that removes "
+        "almost everybody, or almost nobody, is usually the one to question.",
+        "",
         "| Step | Rule | People left | Removed |",
         "|---|---|---|---|",
     ]
     for step in funnel.steps:
-        lines.append(f"| {step.label} | {step.rule} | {step.kept} | {step.dropped} |")
+        # A topic filter reads `T11948|T10440|...`, and an unescaped pipe splits
+        # the row into extra columns wherever this is rendered as Markdown.
+        rule = step.rule.replace("|", chr(92) + "|")
+        lines.append(f"| {step.label} | {rule} | {step.kept} | {step.dropped} |")
 
     lines += [
         "",
-        "Read this table before the numbers above. If a step removed far more "
-        "people than seems right, or the topics are not the ones this record "
-        "belongs to, the cohort is answering a different question and the "
-        "comparison does not hold.",
+        "If a step removed far more people than seems right, or the topics are "
+        "not the ones this record belongs to, the cohort is answering a "
+        "different question and nothing above it holds.",
         "",
         "## What is not here",
         "",
@@ -458,6 +516,9 @@ def write_report(
         "namesakes. The cohort keeps only people it could identify confidently, "
         "which tilts it toward distinctive names.",
         "",
+        "Journal impact is a property of a journal and says nothing about an "
+        "individual paper in it.",
+        "",
         f"Cells covering fewer than {config.cohort.min_cell_size} people are "
         "withheld, because a quartile over a handful of people can identify them.",
         "",
@@ -465,6 +526,15 @@ def write_report(
         "CC0.",
         "",
     ]
+    if config.output.chaperone:
+        # Before the method line, not after it: the closing citation is the last
+        # thing on the page or it is not a closing line.
+        lines[-2:-2] = [
+            "`chaperone.md` asks a second question of the same cohort: when one "
+            "of these papers reached a top-quartile venue, was the person "
+            "leading it or co-authoring it? That page is also in `report.pdf`.",
+            "",
+        ]
 
     path.write_text("\n".join(lines), encoding="utf-8")
     assert_aggregates_only(path)

@@ -316,7 +316,7 @@ def test_the_report_says_both_readings_and_why(tmp_path, config_dict):
         config=build_config(config_dict), cohort_size=20,
     )
     text = path.read_text(encoding="utf-8")
-    assert "Across all the cohort's papers" in text
+    assert "Across every paper the cohort wrote" in text
     assert "compared against themselves" in text
     assert "disagreement is the finding" in text
     assert "their own control" in text

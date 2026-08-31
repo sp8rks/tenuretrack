@@ -224,7 +224,7 @@ def test_the_report_says_why_citations_carry_no_position(tmp_path, config_dict):
 
 def test_the_report_explains_a_capped_comparison(tmp_path, config_dict):
     text = written_report(tmp_path, config_dict).read_text(encoding="utf-8")
-    assert "calendar year 11 of the appointment" in text
+    assert "is now in year 11 of it" in text
     assert "credit the extra years" in text
 
 
@@ -239,7 +239,7 @@ def test_the_report_carries_the_funnel_so_the_cohort_can_be_checked(tmp_path, co
     text = written_report(tmp_path, config_dict).read_text(encoding="utf-8")
     assert "How the cohort was built" in text
     assert "5000" in text
-    assert "Read this table before the numbers" in text
+    assert "the one to question" in text
 
 
 def test_the_report_lists_what_it_cannot_see(tmp_path, config_dict):
