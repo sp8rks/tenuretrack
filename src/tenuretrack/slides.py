@@ -44,6 +44,7 @@ from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.oxml.ns import qn
 from pptx.util import Emu, Inches, Pt
 
+from tenuretrack.branding import logo_path
 from tenuretrack.figures import (
     ACCENT,
     BAND,
@@ -381,6 +382,14 @@ def _title_slide(prs, data: SlideData, today: _dt.date) -> None:
     subject = data.config.subject
     _rect(slide, left=0, top=0, width=Inches(0.16), height=SLIDE_H, fill=ACCENT_RGB)
 
+    # Top right, and only on this slide: a mark repeated on all eight would be
+    # furniture rather than attribution. Sized to finish above 1.66in, which is
+    # where the subject's name starts, so a long name cannot run into it.
+    logo = logo_path()
+    if logo is not None:
+        _picture(slide, logo, left=SLIDE_W - MARGIN - Inches(1.55),
+                 top=Inches(0.38), width=Inches(1.55), height=Inches(1.18))
+
     _text(slide, "PUBLICATION NORMS THROUGH THE TENURE CLOCK", left=MARGIN,
           top=Inches(1.28), width=CONTENT_W, height=Inches(0.24), size=Pt(10),
           bold=True, color=ACCENT_RGB)
@@ -694,12 +703,12 @@ def _chaperone_slide(prs, data: SlideData, figures: Path, number: int) -> bool:
         return False
     slide = _blank(prs)
     _header(
-        slide, "6. Led against co-authored",
+        slide, "6. The chaperone effect",
         "Who leads the papers that reach the best venues",
-        "For the same people over the same window: when a paper reached a "
-        "top-quartile venue, was this person leading it? The left reading is "
-        "dominated by whoever wrote the most papers; on the right every person "
-        "is their own control.",
+        "Sekara et al. called it the chaperone effect: a route into a selective "
+        "venue that runs through a senior co-author. Left is dominated by "
+        "whoever wrote the most papers, and on the right every person is their "
+        "own control.",
     )
     pooled = [
         (label, rate, data.role_counts.get(label, (0, 0))[1])

@@ -65,13 +65,21 @@ The journals the cohort used most, so that "top-quartile venue" can be checked a
 
 Read this list before trusting the counts above it. Some conference abstract series carry an ISSN and are typed as journals by OpenAlex, so they cannot be told apart from a journal in the data and are counted as articles here. A venue near the top of this table with an impact near zero is usually one of them, and every count in this report includes it.
 
-### Who led the papers that reached those venues
+### The chaperone effect: who led the papers that reached those venues
+
+A paper in one of the journals above arrives by one of two routes. Either the person's own group wrote it and sent it, or the person was a co-author on a paper that somebody else's group led. Sekara et al. named the second route the chaperone effect: for a great many researchers, the first appearance in a selective venue comes through an established collaborator rather than through their own lab.
+
+The venue table cannot tell those two routes apart, and neither can the share-in-top-quartile-venues row near the top of this report. Both count a paper the same way whoever led it. The two readings below are the closest this report comes to separating them, for the cohort and not for any one person in it.
 
 Across every paper the cohort wrote, its work reached a top-quartile venue 2.8% more often when its members were not leading it (95% confidence interval 0.6% to 5.0%).
 
 Comparing the same 770 people against themselves, the median person placed 18.2% of the papers they led in a top-quartile venue and 25.0% of the papers they did not.
 
-This follows Sekara et al., PNAS 2018 (doi 10.1073/pnas.1800471115), which found that a route into a prestigious venue often runs through a senior co-author. The whole of it, including the venue-by-venue breakdown and what the approximation does and does not support, is in `chaperone.md` and on its own page in `report.pdf`.
+Those two readings answer different questions and are both here because either one alone misleads. The first is pooled over papers, so whoever wrote the most of them carries it. The second sets each person against themselves, which cancels out field, institution, career stage and how prolific someone is, and drops anyone without enough papers in both roles. Where the two disagree, that disagreement is the finding.
+
+This is a cross-sectional approximation of Sekara, Deville, Andersen, Jones, Lehmann and Ahmadpoor, "The chaperone effect in scientific publishing", PNAS 2018 (doi 10.1073/pnas.1800471115). They followed authors through time. Here each person's window is a single snapshot and the comparison runs across roles inside it, so the direction of a difference is informative and its size is not comparable to theirs. Where a field does not order authors by contribution, none of it applies.
+
+Nothing in it says who should lead what. It is a description of how one group of papers was authored, and a piece of context for reading the venue list above. The whole pass, including which journals the cohort leads in and which it mostly co-authors its way into, is in `chaperone.md` and on its own page in `report.pdf`.
 
 ## How the cohort was built
 

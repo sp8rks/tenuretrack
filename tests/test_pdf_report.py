@@ -15,6 +15,7 @@ import pytest
 from tenuretrack.config import build_config
 from tenuretrack.guardrail import PRESCRIPTIVE_TERMS, GuardrailViolation
 from tenuretrack.pdf_report import PDF_FILENAME, build_pdf_report
+from tenuretrack.slide_data import load_slide_data
 
 MODULE = Path(__file__).resolve().parents[1] / "src" / "tenuretrack" / "pdf_report.py"
 
@@ -223,3 +224,28 @@ def test_numbers_are_written_the_way_a_reader_writes_them():
     assert _tidy(0.49) == "0.49"
     assert _tidy(0.5) == "0.5"
     assert _tidy("") == ""
+
+
+def test_the_cover_carries_the_logo(results, config):
+    """Drawn as an image on the cover, so the page count does not move."""
+    from tenuretrack.pdf_report import _cover
+
+    class Recorder:
+        def __init__(self):
+            self.saved = []
+
+        def savefig(self, fig, **_kwargs):
+            self.saved.append(fig)
+
+    recorder = Recorder()
+    _cover(recorder, load_slide_data(results, config))
+    fig = recorder.saved[0]
+    assert any(ax.images for ax in fig.axes), "no image was drawn on the cover"
+
+
+def test_a_report_still_builds_when_the_logo_is_missing(results, config, monkeypatch):
+    """An install stripped of its assets loses a mark, not a report."""
+    monkeypatch.setattr("tenuretrack.pdf_report.logo_path", lambda name=None: None)
+    path = build_pdf_report(results, config)
+    assert path.read_bytes().startswith(b"%PDF")
+    assert _pages(path) == 7

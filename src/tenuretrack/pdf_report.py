@@ -31,6 +31,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib.backends.backend_pdf import PdfPages  # noqa: E402
 from matplotlib.patches import FancyBboxPatch  # noqa: E402
 
+from tenuretrack.branding import logo_path  # noqa: E402
 from tenuretrack.chaperone import CHAPERONE_CSV  # noqa: E402
 from tenuretrack.config import Config  # noqa: E402
 from tenuretrack.figures import (  # noqa: E402
@@ -196,10 +197,33 @@ def _stat_tiles(fig, tiles, *, y: float, height: float = 0.115) -> None:
 # ----------------------------------------------------------------------- pages
 
 
+def _logo(fig, *, left: float, top: float, width: float) -> None:
+    """Draw the logo in the top corner, or draw nothing and carry on.
+
+    Skipped in silence when the asset is not there. A cover page without a
+    logo is a cover page; a run that stops because of one is a bug.
+    """
+    path = logo_path()
+    if path is None:
+        return
+    try:
+        image = plt.imread(path)
+    except (OSError, ValueError):  # pragma: no cover - a corrupt asset
+        return
+    rows, columns = image.shape[0], image.shape[1]
+    # Figure fractions are not square: the page is 11 by 8.5, so a box given
+    # equal fractions would squash the artwork by a fifth.
+    height = width * (rows / columns) * (PAGE[0] / PAGE[1])
+    ax = fig.add_axes([left, top - height, width, height])
+    ax.imshow(image, interpolation="antialiased")
+    ax.axis("off")
+
+
 def _cover(pdf: PdfPages, data: SlideData) -> None:
     fig = _page()
     subject = data.config.subject
     label = data.config.subfield.label or "the subfield"
+    _logo(fig, left=0.775, top=0.955, width=0.165)
 
     fig.text(0.06, 0.90, "PUBLICATION NORMS THROUGH THE TENURE CLOCK",
              fontsize=9, color=ACCENT, fontweight="bold", va="top", **FONT)
@@ -250,8 +274,8 @@ def _cover(pdf: PdfPages, data: SlideData) -> None:
     ]
     if data.has_chaperone:
         contents.append(
-            ("Who leads the good papers",
-             "led against co-authored, within the same people")
+            ("The chaperone effect",
+             "who leads the papers that reach the best venues")
         )
     contents.append(("What this cannot see", "the limits, in plain words"))
 
@@ -739,12 +763,13 @@ def _chaperone_page(pdf: PdfPages, data: SlideData) -> None:
         return
     fig = _page()
     _title(fig, "Who leads the papers that reach the best venues",
-           kicker="6. Led against co-authored")
+           kicker="6. The chaperone effect")
     _lede(
         fig,
-        "For the same people over the same window: when a paper reached a "
-        "top-quartile venue, was this person leading it? Led means last author, "
-        "or flagged as the corresponding one.",
+        "When a paper reached a top-quartile venue, was this person leading it "
+        "or co-authoring somebody else's? Sekara et al. called that second "
+        "route the chaperone effect. Led means last author, or flagged as the "
+        "corresponding one.",
     )
 
     left_x, right_x = 0.075, 0.575

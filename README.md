@@ -1,8 +1,12 @@
-# tenuretrack
+<p align="center">
+  <img src="src/tenuretrack/assets/tenuretrack-logo.png" alt="tenuretrack" width="340">
+</p>
 
-**Nobody tells assistant professors the numbers. This tool computes them.**
+<p align="center"><strong>Nobody tells assistant professors the numbers. This tool computes them.</strong></p>
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/sp8rks/tenuretrack/blob/main/notebooks/tenuretrack_colab.ipynb)
+<p align="center">
+  <a href="https://colab.research.google.com/github/sp8rks/tenuretrack/blob/main/notebooks/tenuretrack_colab.ipynb"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"></a>
+</p>
 
 **Run it in your browser.** No install, no Python. Open the notebook, type your
 ORCID, your university, your start year and your email, and run the cells from

@@ -1,6 +1,8 @@
-# Who leads the papers that reach the best venues in materials chemistry
+# The chaperone effect in materials chemistry
 
 For 1091 people in materials chemistry, through career year 6: when a paper reached a top-quartile venue, was this person leading it or co-authoring it?
+
+Sekara et al. named the chaperone effect: for a great many researchers, the route into a selective venue runs through an established collaborator rather than through their own lab. A venue list on its own cannot tell the two routes apart. This page is what separates them, for one cohort and never for one person in it.
 
 Led means last author, or flagged as the corresponding one. First author but not leading is the shape of a paper written inside somebody else's group. Middle is everything else. A paper counts on every side only if its venue has an impact figure.
 

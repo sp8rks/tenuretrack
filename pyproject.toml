@@ -28,6 +28,11 @@ tenuretrack = "tenuretrack.cli:app"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+# The logo is drawn onto the report cover and the deck. Colab installs this
+# package from GitHub, so the file has to travel in the wheel.
+[tool.setuptools.package-data]
+tenuretrack = ["assets/*.png"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
