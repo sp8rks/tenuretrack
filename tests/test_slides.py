@@ -14,7 +14,13 @@ import pytest
 from pptx import Presentation
 
 from tenuretrack.config import build_config
-from tenuretrack.figures import dot_and_range_chart, funnel_chart, role_rate_chart, venue_chart
+from tenuretrack.figures import (
+    funnel_steps_chart,
+    position_chart,
+    role_pair_chart,
+    trajectory_chart,
+    venue_lead_chart,
+)
 from tenuretrack.guardrail import PRESCRIPTIVE_TERMS, GuardrailViolation
 from tenuretrack.slides import build_slides, export_pdf, load_slide_data, subject_slug
 
@@ -118,31 +124,50 @@ def test_an_empty_results_directory_reads_as_empty(tmp_path, config_dict):
 
 
 def test_the_funnel_chart_is_written(tmp_path):
-    path = funnel_chart([("candidates", 8000), ("kept", 900)], tmp_path / "f.png")
+    path = funnel_steps_chart(
+        [("candidates", 8000), ("kept", 900)], tmp_path / "f.png"
+    )
     assert path.exists() and path.stat().st_size > 1000
 
 
-def test_the_dot_and_range_chart_handles_an_uncompared_row(tmp_path):
+def test_the_position_chart_handles_an_uncompared_row(tmp_path):
     rows = [
         ("Journal articles", 30.0, 5.0, 10.0, 20.0, True),
         ("Citations", 900.0, None, None, None, False),
     ]
-    path = dot_and_range_chart(rows, tmp_path / "d.png")
+    path = position_chart(
+        [(label, value, p25, p50, p75, compared, "")
+         for label, value, p25, p50, p75, compared in rows],
+        tmp_path / "d.png",
+    )
     assert path.exists()
 
 
 def test_charts_cope_with_nothing_to_draw(tmp_path):
-    assert venue_chart([], tmp_path / "v.png").exists()
-    assert role_rate_chart([("Led", None)], tmp_path / "r.png").exists()
+    assert venue_lead_chart(
+        [("Journal", 10, None, False)], {}, tmp_path / "v.png"
+    ).exists()
+    assert role_pair_chart([("Led", None, 0)], None, tmp_path / "r.png").exists()
+    assert trajectory_chart(
+        [("Journal articles", [1, 2], [1, 2], [2, 3], [3, 4], None, False)],
+        "Jane", 2, tmp_path / "t.png",
+    ).exists()
 
 
 # --------------------------------------------------------------------- deck
 
 
-def test_the_deck_has_six_slides(tmp_path, config_dict):
+def test_the_deck_covers_every_section(tmp_path, config_dict):
+    """Title, position, trajectory, norms, funnel, venues, chaperone, limits."""
     data, results = data_for(tmp_path, config_dict)
     deck = build_slides(data, results, today=_dt.date(2026, 8, 28))
-    assert len(Presentation(deck).slides) == 6
+    assert len(Presentation(deck).slides) == 8
+
+
+def test_a_run_without_the_chaperone_pass_drops_that_slide(tmp_path, config_dict):
+    """A slide about an analysis that did not run would be a blank assertion."""
+    data, results = data_for(tmp_path, config_dict, with_chaperone=False)
+    assert len(Presentation(build_slides(data, results)).slides) == 7
 
 
 def test_the_deck_is_named_after_the_subject(tmp_path, config_dict):
@@ -172,9 +197,51 @@ def test_the_deck_reads_as_description_not_instruction(tmp_path, config_dict):
 def test_the_deck_carries_the_numbers_from_the_files(tmp_path, config_dict):
     data, results = data_for(tmp_path, config_dict)
     text = all_text(build_slides(data, results))
-    assert "900" in text  # cohort size from funnel.csv
-    assert "career year 11" in text  # from subject.csv
-    assert "above p75" in text  # the position, not recomputed
+    assert "900" in text  # cohort size, from funnel.csv
+    assert "Career year 11" in text  # the subject's own year, from subject.csv
+    assert "career year 6" in text  # the comparison horizon, from the same file
+    assert "10" in text  # a median, from benchmarks.csv
+
+
+def test_every_slide_after_the_title_is_numbered_and_attributed(
+    tmp_path, config_dict
+):
+    """A slide gets forwarded on its own, so each one has to say whose it is."""
+    slides = list(Presentation(build_slides(*data_for(tmp_path, config_dict))).slides)
+    for number, slide in enumerate(slides[1:], start=2):
+        text = "\n".join(
+            shape.text_frame.text for shape in slide.shapes if shape.has_text_frame
+        )
+        assert "Jane Doe" in text
+        assert "aggregates only" in text
+        assert text.rstrip().endswith(str(number))
+
+
+def test_tables_carry_no_inherited_grid(tmp_path, config_dict):
+    """The stock table style rules every edge, which reads as a spreadsheet.
+
+    Only the header's top and each row's bottom are drawn, so this checks the
+    left and right edges were explicitly switched off rather than left to
+    whatever theme the deck is opened under.
+    """
+    from pptx.oxml.ns import qn
+
+    deck = build_slides(*data_for(tmp_path, config_dict))
+    tables = [
+        shape.table
+        for slide in Presentation(deck).slides
+        for shape in slide.shapes
+        if shape.has_table
+    ]
+    assert tables, "the deck lost its norms table"
+    for table in tables:
+        for row in table.rows:
+            for cell in row.cells:
+                properties = cell._tc.find(qn("a:tcPr"))
+                for edge in ("a:lnL", "a:lnR"):
+                    line = properties.find(qn(edge))
+                    assert line is not None
+                    assert line.find(qn("a:noFill")) is not None
 
 
 def test_the_deck_names_only_the_subject(tmp_path, config_dict):
@@ -286,14 +353,20 @@ def accent_pixels(png_path) -> int:
     return int((np.abs(image - target).max(axis=2) < 0.02).sum())
 
 
-def test_an_uncompared_metric_is_drawn_with_no_dot_at_all(tmp_path):
-    """A dot anywhere on this axis reads as a position, and one in the middle
-    reads as "at the median", which is the one thing this row must not say."""
-    uncompared = dot_and_range_chart(
-        [("Citations", 900.0, None, None, None, False)], tmp_path / "none.png"
+def test_an_uncompared_metric_is_drawn_with_no_marker_at_all(tmp_path):
+    """A marker anywhere on this row reads as a position, and one in the middle
+    reads as "at the median", which is the one thing this row must not say.
+
+    Checked in pixels rather than in the code, because the rule is about what
+    a reader sees. The row still gets a band: the cohort's own spread is real
+    and worth showing, it is only this record that has nowhere to sit on it.
+    """
+    uncompared = position_chart(
+        [("Citations", 900.0, 5.0, 10.0, 20.0, False, "")], tmp_path / "none.png"
     )
-    compared = dot_and_range_chart(
-        [("Journal articles", 30.0, 5.0, 10.0, 20.0, True)], tmp_path / "some.png"
+    compared = position_chart(
+        [("Journal articles", 30.0, 5.0, 10.0, 20.0, True, "above p75")],
+        tmp_path / "some.png",
     )
-    assert accent_pixels(uncompared) == 0, "an uncompared row must draw no dot"
+    assert accent_pixels(uncompared) == 0, "an uncompared row must draw no marker"
     assert accent_pixels(compared) > 0, "a compared row must draw one"

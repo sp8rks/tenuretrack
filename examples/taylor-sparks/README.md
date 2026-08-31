@@ -62,7 +62,7 @@ they disagree.
 | `chaperone.md`, `chaperone.csv` | Top-quartile venue rates by authorship role, pooled and within each person. Also a page in `report.pdf` |
 | `funnel.csv` | How many people each filter removed |
 | `subject.csv`, `venues.csv` | Machine-readable inputs to the deck and the PDF |
-| `taylor-d-sparks.pptx` | The six-slide deck |
+| `taylor-d-sparks.pptx` | The deck: the same numbers, laid out to present |
 | `figures/` | The charts, shared by the deck and the report |
 
 Everything here is aggregates only. The guardrail runs on this directory in CI.

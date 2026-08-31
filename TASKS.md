@@ -56,7 +56,7 @@ A full run does not fit in the keyless budget. Size every new stage against this
 - `results/chaperone.md` and `.csv`. Rerunnable with no network from cache.
 
 ## Task 8: Slides
-- `slides` subcommand builds a six-slide PPTX from `results/` following `.claude/skills/deck-builder`. Export a PDF preview if LibreOffice is available; skip cleanly if not.
+- `slides` subcommand builds a PPTX from `results/` following `.claude/skills/deck-builder`. Export a PDF preview if LibreOffice is available; skip cleanly if not.
 
 ## Task 9: Example 1, Taylor Sparks
 - Run the full pipeline on `examples/taylor-sparks/benchmark.yaml`. Commit `results/` and the deck. This subject is past year 6, so the through-year-6 benchmark applies directly and the comparison horizon is year 6.

@@ -17,7 +17,7 @@ Give it your ORCID, your institution, and your start year. It builds a cohort of
 
 ## What you get
 
-`results/report.pdf` is the thing to open: the whole report with the charts, the funnel and the limits in one document. Beside it are the same numbers as Markdown and CSV, and a six-slide PPTX for anyone who has to present them.
+`results/report.pdf` is the thing to open: the whole report with the charts, the funnel and the limits in one document. Beside it are the same numbers as Markdown and CSV, and a PPTX deck for anyone who has to present them.
 
 - **Where your record sits** at the same career year as the cohort, each measure against the cohort's middle half
 - **Year by year**: the cohort's p25/median/p75 at the end of every year of the clock, not only at year six, so the numbers mean something in year two as well
@@ -54,7 +54,7 @@ tenuretrack run
 # builds the cohort, computes norms, writes results/
 
 tenuretrack chaperone   # optional: redo just the led-vs-co-authored pass, free
-tenuretrack slides      # optional: the same numbers as a six-slide deck
+tenuretrack slides      # optional: the same numbers as a slide deck
 ```
 
 Everything is cached locally so reruns are free. A first run pulls a few thousand author records and takes 10 to 40 minutes depending on the size of your field, with a key. Without one it spends the day's allowance, stops, and resumes on the next run, so allow two or three days.

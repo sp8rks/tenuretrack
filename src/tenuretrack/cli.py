@@ -403,7 +403,7 @@ def slides(
     results_dir: Path = RESULTS_OPTION,
     pdf: bool = PDF_OPTION,
 ) -> None:
-    """Build the six-slide deck from an existing results directory.
+    """Build the slide deck from an existing results directory.
 
     Reads only what `run` already wrote. Nothing is recomputed, so the deck
     cannot disagree with the report.

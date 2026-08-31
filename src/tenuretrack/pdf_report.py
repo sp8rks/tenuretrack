@@ -33,7 +33,16 @@ from matplotlib.patches import FancyBboxPatch  # noqa: E402
 
 from tenuretrack.chaperone import CHAPERONE_CSV  # noqa: E402
 from tenuretrack.config import Config  # noqa: E402
-from tenuretrack.figures import ACCENT, COHORT, INK, MUTED  # noqa: E402
+from tenuretrack.figures import (  # noqa: E402
+    ACCENT,
+    BAND,
+    COHORT,
+    INK,
+    MUTED,
+    PANEL,
+    RIBBON,
+    RULE,
+)
 from tenuretrack.guardrail import assert_aggregates_only  # noqa: E402
 from tenuretrack.metrics import BENCHMARKS_CSV, METRICS  # noqa: E402
 from tenuretrack.pool import FUNNEL_FILENAME  # noqa: E402
@@ -48,10 +57,6 @@ PAGE = (11.0, 8.5)
 """US letter, landscape, so the wide comparison panels are not cramped."""
 
 FONT = {"family": "DejaVu Sans"}
-BAND = "#3b5b7a"
-RIBBON = "#dfe4e9"
-RULE = "#e2e6ea"
-PANEL = "#f5f7f9"
 
 METRIC_ORDER = tuple(metric.key for metric in METRICS)
 METRIC_LABELS = {metric.key: metric.label for metric in METRICS}
