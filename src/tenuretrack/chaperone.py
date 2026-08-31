@@ -33,20 +33,37 @@ from pathlib import Path
 
 import numpy as np
 
-from tenuretrack.career import StartEstimate
+from tenuretrack.career import (
+    STARTS_FILENAME,
+    WORKS_FILENAME,
+    StartEstimate,
+    build_starts,
+    candidates_worth_asking,
+)
 from tenuretrack.config import Config
 from tenuretrack.guardrail import assert_aggregates_only
-from tenuretrack.metrics import window_papers
+from tenuretrack.metrics import (
+    collect_member_works,
+    fetch_venue_impacts,
+    headline_window_papers,
+    top_quartile_cutoff,
+    window_papers,
+)
+from tenuretrack.pool import POOL_FILENAME, build_pool
 from tenuretrack.works import FIRST_NOT_LED, LED, MIDDLE, Work, role_of
 
 __all__ = [
     "CHAPERONE_CSV",
     "CHAPERONE_MD",
+    "ChaperoneInputs",
+    "CohortDataMissing",
     "Gap",
     "PairedTest",
     "PersonRoles",
     "RoleRate",
     "build_chaperone",
+    "chaperone_summary",
+    "inputs_from_disk",
     "led_vs_middle_gap",
     "paired_within_person",
     "person_roles",
@@ -75,6 +92,24 @@ sign test starts counting coin flips.
 """
 
 BOOTSTRAP_CI = (2.5, 97.5)
+
+
+class CohortDataMissing(RuntimeError):
+    """`data/` does not hold what a no-network rerun needs, and says which file."""
+
+
+@dataclass(frozen=True, slots=True)
+class ChaperoneInputs:
+    """The three things this analysis needs from the metrics stage.
+
+    `BenchmarkResult` carries these among much else, so a full run passes that
+    straight through. A standalone rerun builds this instead, rather than
+    faking a benchmark result whose other fields would be lies.
+    """
+
+    works_by_member: Mapping[str, Sequence[Work]]
+    impacts: Mapping[str, float]
+    cutoff: float | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -555,7 +590,7 @@ def write_chaperone_md(
 
 
 def build_chaperone(
-    benchmarks,
+    benchmarks: ChaperoneInputs,
     starts: Mapping[str, StartEstimate],
     config: Config,
     *,
@@ -563,7 +598,12 @@ def build_chaperone(
     on_progress: Callable[[str], None] | None = None,
     rng: np.random.Generator | None = None,
 ) -> tuple[Path, Path, Gap, PairedTest]:
-    """The whole of task 7, from papers already on disk. No network."""
+    """The whole of task 7, from papers already on disk. No network.
+
+    `benchmarks` is anything carrying `works_by_member`, `impacts` and
+    `cutoff`: the `BenchmarkResult` a full run already has, or the
+    `ChaperoneInputs` that `inputs_from_disk` rebuilds for a standalone rerun.
+    """
     results = Path(results_dir) if results_dir is not None else config.output.dir
 
     people = [
@@ -596,3 +636,98 @@ def build_chaperone(
     if on_progress:
         on_progress(f"Wrote {csv_path.name} and {md_path.name}.")
     return csv_path, md_path, gap, paired
+
+
+def inputs_from_disk(
+    client,
+    config: Config,
+    *,
+    data_dir: str | Path = "data",
+    results_dir: str | Path | None = None,
+    on_progress: Callable[[str], None] | None = None,
+) -> tuple[ChaperoneInputs, dict[str, StartEstimate]]:
+    """Rebuild what this analysis needs from what a previous run left on disk.
+
+    Task 7 asks for a rerun with no network. Every stage before this one
+    already short-circuits to a file under `data/`, so replaying them costs
+    nothing: the pool, the career starts and the cohort's papers are read
+    rather than fetched. Only the venue lookups reach the client, and those
+    come back from `.cache/` on any machine that has run the pipeline.
+
+    Replaying the stages rather than reading `results/` is deliberate. The
+    quartile files hold aggregates, and this analysis needs one row per person
+    per paper, which is exactly what never leaves `data/`.
+    """
+    data_dir = Path(data_dir)
+    for filename, stage in (
+        (POOL_FILENAME, "the candidate pool"),
+        (STARTS_FILENAME, "the career starts"),
+        (WORKS_FILENAME, "the cohort's papers"),
+    ):
+        if not (data_dir / filename).exists():
+            raise CohortDataMissing(
+                f"{data_dir / filename} is not there, so {stage} would have to "
+                "be gathered again, which is the long part of a run rather "
+                "than a rerun. Run `tenuretrack run` first, or point "
+                "--data-dir at the directory that run wrote."
+            )
+
+    pool = build_pool(
+        client, config, data_dir=data_dir, results_dir=results_dir,
+        on_progress=on_progress,
+    )
+    members = build_starts(
+        client, pool.kept, config, pool.funnel, data_dir=data_dir,
+        on_progress=on_progress,
+    )
+    starts = {candidate.author_id: estimate for candidate, estimate in members}
+    asked = [c.author_id for c in candidates_worth_asking(pool.kept, config)]
+
+    works_by_member = collect_member_works(
+        client, asked, starts, config, data_dir=data_dir, on_progress=on_progress
+    )
+    impacts = fetch_venue_impacts(
+        client,
+        (w.source_id for works in works_by_member.values() for w in works),
+        on_progress=on_progress,
+    )
+    cutoff = top_quartile_cutoff(
+        headline_window_papers(works_by_member, starts, config), impacts
+    )
+    return ChaperoneInputs(works_by_member, impacts, cutoff), starts
+
+
+def chaperone_summary(gap: Gap, paired: PairedTest) -> list[str]:
+    """The finding in two sentences, for the report that people actually open.
+
+    `chaperone.md` and the PDF page carry the whole thing. This is the pointer
+    that goes in `report.md`, because a venue list read without it invites the
+    reading that a top-quartile paper means a top-quartile group.
+    """
+    lines = []
+    if gap.gap is not None:
+        direction = "more often" if gap.gap > 0 else "less often"
+        interval = (
+            f" (95% confidence interval {_pct(gap.lo)} to {_pct(gap.hi)})"
+            if gap.lo is not None and gap.hi is not None
+            else ""
+        )
+        settled = (
+            " That interval spans zero, so this draw of people has not settled "
+            "the direction."
+            if gap.lo is not None and gap.hi is not None and gap.lo <= 0 <= gap.hi
+            else ""
+        )
+        lines.append(
+            "Across every paper the cohort wrote, its work reached a "
+            f"top-quartile venue {_pct(abs(gap.gap))} {direction} when its "
+            f"members were not leading it{interval}.{settled}"
+        )
+    if paired.people and paired.median_led_share is not None:
+        lines.append(
+            f"Comparing the same {paired.people} people against themselves, the "
+            f"median person placed {_pct(paired.median_led_share)} of the papers "
+            f"they led in a top-quartile venue and "
+            f"{_pct(paired.median_middle_share)} of the papers they did not."
+        )
+    return lines

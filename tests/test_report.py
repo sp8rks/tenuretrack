@@ -396,3 +396,30 @@ def test_a_report_with_no_extension_says_nothing_about_one(tmp_path, config_dict
     assert "clock was stopped" not in written_report(
         tmp_path, config_dict
     ).read_text(encoding="utf-8")
+
+
+def test_the_chaperone_finding_lands_under_the_venue_table(tmp_path, config_dict):
+    """Where it changes a reading, not in a footer nobody reaches.
+
+    A list of top-quartile journals invites the inference that a paper in one
+    came out of the author's own group. The sentence saying how often it did
+    belongs against that list.
+    """
+    text = written_report(
+        tmp_path, config_dict,
+        chaperone=["Across every paper the cohort wrote, it went better.",
+                   "Comparing the same 770 people against themselves, and so on."],
+    ).read_text(encoding="utf-8")
+    assert "Who led the papers that reached those venues" in text
+    assert text.index("| Venue |") < text.index("Who led the papers")
+    assert text.index("Who led the papers") < text.index("How the cohort was built")
+    assert "10.1073/pnas.1800471115" in text
+    # The footer pointer is the fallback for a run without the pass, and would
+    # be a second, weaker mention of something the body now carries.
+    assert "asks a second question" not in text
+
+
+def test_without_the_pass_the_report_still_points_at_it(tmp_path, config_dict):
+    text = written_report(tmp_path, config_dict).read_text(encoding="utf-8")
+    assert "Who led the papers that reached those venues" not in text
+    assert "asks a second question" in text

@@ -15,7 +15,12 @@ import yaml
 
 from tenuretrack import __version__
 from tenuretrack.career import StaleStarts, build_starts, candidates_worth_asking
-from tenuretrack.chaperone import build_chaperone
+from tenuretrack.chaperone import (
+    CohortDataMissing,
+    build_chaperone,
+    chaperone_summary,
+    inputs_from_disk,
+)
 from tenuretrack.config import Config, ConfigError, load_config
 from tenuretrack.metrics import build_benchmarks
 from tenuretrack.openalex import (
@@ -275,19 +280,22 @@ def run(
                 data_dir=data_dir,
                 on_progress=typer.echo,
             )
+            chaperone_lines: list[str] = []
             if config.output.chaperone:
-                build_chaperone(
+                _csv, _md, gap, paired = build_chaperone(
                     benchmarks,
                     {c.author_id: e for c, e in members},
                     config,
                     on_progress=typer.echo,
                 )
+                chaperone_lines = chaperone_summary(gap, paired)
             report_path, subject, horizon = build_report(
                 client,
                 config,
                 benchmarks,
                 result.funnel,
                 this_year=_dt.date.today().year,
+                chaperone=chaperone_lines,
                 on_progress=typer.echo,
             )
         except StaleStarts as exc:
@@ -343,10 +351,50 @@ def _echo_funnel(funnel) -> None:
 
 
 @app.command()
-def chaperone(config_path: Path = CONFIG_OPTION) -> None:
-    """Compare venue quality on led versus co-authored papers."""
-    _load(config_path)
-    _not_implemented("chaperone", "task 7")
+def chaperone(
+    config_path: Path = CONFIG_OPTION,
+    cache_dir: Path = CACHE_OPTION,
+    data_dir: Path = DATA_OPTION,
+    results_dir: Path = RESULTS_OPTION,
+) -> None:
+    """Compare venue quality on led versus co-authored papers.
+
+    Rebuilt from what `run` already left on disk, so a rerun costs no requests
+    and can be repeated after editing `excluded_venues` or the article types
+    without paying for the cohort again.
+    """
+    config = _load(config_path)
+    mailto = _require_mailto()
+    results = results_dir or config.output.dir
+
+    with OpenAlexClient(mailto=mailto, cache_dir=cache_dir) as client:
+        try:
+            inputs, starts = inputs_from_disk(
+                client, config, data_dir=data_dir, results_dir=results,
+                on_progress=typer.echo,
+            )
+            _csv_path, md_path, _gap, _paired = build_chaperone(
+                inputs, starts, config, results_dir=results, on_progress=typer.echo
+            )
+        except CohortDataMissing as exc:
+            _echo_err(str(exc))
+            raise typer.Exit(code=EXIT_BAD_CONFIG) from exc
+        except QuotaExhausted as exc:
+            _echo_err(str(exc))
+            raise typer.Exit(code=EXIT_NETWORK) from exc
+        except OpenAlexError as exc:
+            _echo_err(f"OpenAlex request failed: {exc}")
+            raise typer.Exit(code=EXIT_NETWORK) from exc
+        requests, hits = client.request_count, client.cache_hits
+        budget = _budget_line(client)
+
+    # Redrawn so the PDF's chaperone page matches the file just written. The
+    # deck is left alone: it is built on request, and rebuilding it here would
+    # need python-pptx, which this command otherwise does not.
+    build_pdf_report(results, config, on_progress=typer.echo)
+
+    typer.echo(f"OpenAlex requests: {requests} (served from cache: {hits}){budget}")
+    typer.echo(f"Read {md_path}, or the same page in {results / 'report.pdf'}.")
 
 
 @app.command()

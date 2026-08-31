@@ -60,6 +60,7 @@ __all__ = [
     "bootstrap_quartiles",
     "fetch_venue_impacts",
     "h_index",
+    "headline_window_papers",
     "member_metrics",
     "top_quartile_cutoff",
     "window_papers",
@@ -545,6 +546,35 @@ def write_benchmarks_md(
 # ------------------------------------------------------------- orchestration
 
 
+def headline_window_papers(
+    works_by_member: Mapping[str, Sequence[Work]],
+    starts: Mapping[str, StartEstimate],
+    config: Config,
+    *,
+    horizon: int | None = None,
+) -> list[Work]:
+    """Every cohort member's window papers at the headline horizon, pooled.
+
+    The set the top-quartile venue cutoff and the venue list are both built
+    from. Named rather than inlined because `chaperone` recomputes the same
+    cutoff from disk, and two copies of this loop would be two definitions of
+    what a top-quartile venue is.
+    """
+    horizon = max(config.cohort.horizons) if horizon is None else horizon
+    return [
+        paper
+        for author_id, works in works_by_member.items()
+        if starts.get(author_id) and starts[author_id].year
+        for paper in window_papers(
+            works,
+            starts[author_id].year or 0,
+            horizon,
+            config.cohort.article_types,
+            config.cohort.excluded_venues,
+        )
+    ]
+
+
 def build_metrics(
     works_by_member: Mapping[str, Sequence[Work]],
     starts: Mapping[str, StartEstimate],
@@ -561,14 +591,9 @@ def build_metrics(
     excluded = config.cohort.excluded_venues
     headline = max(horizons)
 
-    headline_papers = [
-        paper
-        for author_id, works in works_by_member.items()
-        if starts.get(author_id) and starts[author_id].year
-        for paper in window_papers(
-            works, starts[author_id].year or 0, headline, article_types, excluded
-        )
-    ]
+    headline_papers = headline_window_papers(
+        works_by_member, starts, config, horizon=headline
+    )
     cutoff = top_quartile_cutoff(headline_papers, impacts)
 
     per_member: dict[int, list[MemberMetrics]] = {}
