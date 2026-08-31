@@ -9,6 +9,7 @@ longitudinal result.
 from __future__ import annotations
 
 import csv
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -16,9 +17,12 @@ import pytest
 from tenuretrack.career import AFFILIATION_LED, HIGH, StartEstimate
 from tenuretrack.chaperone import (
     MIN_PAPERS_PER_ROLE,
+    CohortDataMissing,
     Gap,
     PairedTest,
     PersonRoles,
+    chaperone_summary,
+    inputs_from_disk,
     led_vs_middle_gap,
     paired_within_person,
     person_roles,
@@ -356,3 +360,205 @@ def test_no_em_dashes_in_the_chaperone_report(tmp_path, config_dict):
         config=build_config(config_dict), cohort_size=20,
     )
     assert "—" not in path.read_text(encoding="utf-8")
+
+
+# ------------------------------------------------- rerunning with no network
+
+
+class SourcesOnlyClient:
+    """A client that serves venue lookups and refuses everything else.
+
+    The point of the standalone command is that the long stages come off disk.
+    Anything asking this for authors or works has gone back to the network for
+    something a previous run already paid for, which is the failure this whole
+    path exists to prevent.
+    """
+
+    def __init__(self, impacts):
+        self.impacts = impacts
+        self.request_count = 0
+        self.cache_hits = 0
+        self.asked_for = []
+
+    def get(self, path, params=None):
+        self.asked_for.append(path)
+        if path != "/sources":
+            raise AssertionError(f"went back to the network for {path}")
+        self.request_count += 1
+        return {
+            "results": [
+                {
+                    "id": f"https://openalex.org/{source_id}",
+                    "summary_stats": {"2yr_mean_citedness": impact},
+                }
+                for source_id, impact in self.impacts.items()
+            ]
+        }
+
+
+def cohort_on_disk(data_dir, config, people, *, year=2010):
+    """Write the three files a finished run leaves under `data/`."""
+    import gzip
+    import json
+
+    from tenuretrack.career import (
+        AFFILIATION_LED,
+        HIGH,
+        STARTS_FILENAME,
+        STARTS_META_FILENAME,
+        WORKS_FILENAME,
+        StartEstimate,
+        starts_fingerprint,
+    )
+    from tenuretrack.pool import POOL_FILENAME, Affiliation, Candidate, TopicShare
+    from tenuretrack.works import work_to_row
+
+    data_dir = Path(data_dir)
+    data_dir.mkdir(parents=True, exist_ok=True)
+    topic = config.subfield.topics[0].id
+    candidates = [
+        Candidate(
+            author_id=author_id,
+            name="",
+            works_count=40,
+            topics=(TopicShare(id=topic, count=40, share=1.0),),
+            affiliations=(
+                Affiliation(
+                    ror="https://ror.org/0aaaaaa11", name="A University",
+                    country_code="US", type="education",
+                    years=(year, year + config.cohort.horizon_years),
+                ),
+            ),
+        )
+        for author_id in people
+    ]
+    with gzip.open(data_dir / POOL_FILENAME, "wt", encoding="utf-8") as fh:
+        for candidate in candidates:
+            fh.write(json.dumps(candidate.to_row()) + "\n")
+
+    estimates = {
+        author_id: StartEstimate(
+            author_id, year, AFFILIATION_LED, HIGH,
+            institution_ror="https://ror.org/0aaaaaa11",
+        )
+        for author_id in people
+    }
+    with gzip.open(data_dir / STARTS_FILENAME, "wt", encoding="utf-8") as fh:
+        for estimate in estimates.values():
+            fh.write(json.dumps(estimate.to_row()) + "\n")
+    (data_dir / STARTS_META_FILENAME).write_text(
+        json.dumps(starts_fingerprint(list(people), config)), encoding="utf-8"
+    )
+
+    with gzip.open(data_dir / WORKS_FILENAME, "wt", encoding="utf-8") as fh:
+        for author_id in people:
+            works = [
+                paper(year=year + 1, position="last", source="S1", who=author_id),
+                paper(year=year + 2, position="first", source="S2", who=author_id),
+                paper(year=year + 3, position="middle", source="S1", who=author_id),
+            ]
+            fh.write(
+                json.dumps(
+                    {
+                        "author_id": author_id,
+                        "works": [work_to_row(w) for w in works],
+                    }
+                )
+                + "\n"
+            )
+    return candidates, estimates
+
+
+def test_a_rerun_reads_the_cohort_off_disk_and_asks_only_for_venues(
+    tmp_path, config_dict
+):
+    """Task 7: rerunnable with no network. The client refuses anything else."""
+    config = build_config(config_dict)
+    people = [f"A100000{i}" for i in range(1, 7)]
+    cohort_on_disk(tmp_path / "data", config, people)
+
+    client = SourcesOnlyClient({"S1": 9.0, "S2": 1.0})
+    inputs, starts = inputs_from_disk(
+        client, config, data_dir=tmp_path / "data", results_dir=tmp_path / "results"
+    )
+
+    assert set(client.asked_for) == {"/sources"}
+    assert set(inputs.works_by_member) == set(people)
+    assert inputs.impacts == {"S1": 9.0, "S2": 1.0}
+    assert inputs.cutoff is not None
+    assert all(estimate.year == 2010 for estimate in starts.values())
+
+
+def test_a_rerun_says_which_file_is_missing_rather_than_regathering(
+    tmp_path, config_dict
+):
+    """Falling through to build_pool would start a several-thousand-request pull."""
+    config = build_config(config_dict)
+    with pytest.raises(CohortDataMissing) as caught:
+        inputs_from_disk(
+            SourcesOnlyClient({}), config, data_dir=tmp_path / "nothing",
+            results_dir=tmp_path / "results",
+        )
+    assert "pool.jsonl.gz" in str(caught.value)
+    assert "tenuretrack run" in str(caught.value)
+
+
+def test_the_rebuilt_inputs_drive_the_same_analysis(tmp_path, config_dict):
+    """What comes off disk is what build_chaperone already knows how to read."""
+    from tenuretrack.chaperone import CHAPERONE_CSV, CHAPERONE_MD, build_chaperone
+
+    config = build_config(config_dict)
+    people = [f"A100000{i}" for i in range(1, 9)]
+    cohort_on_disk(tmp_path / "data", config, people)
+
+    inputs, starts = inputs_from_disk(
+        SourcesOnlyClient({"S1": 9.0, "S2": 1.0}), config,
+        data_dir=tmp_path / "data", results_dir=tmp_path / "results",
+    )
+    csv_path, md_path, gap, paired = build_chaperone(
+        inputs, starts, config, results_dir=tmp_path / "results",
+        rng=np.random.default_rng(0),
+    )
+    assert csv_path.name == CHAPERONE_CSV
+    assert md_path.name == CHAPERONE_MD
+    assert md_path.read_text(encoding="utf-8").startswith("# Who leads")
+    assert gap is not None and paired is not None
+
+
+# ------------------------------------------------------ the report's summary
+
+
+def test_the_summary_names_a_direction_and_an_interval():
+    lines = chaperone_summary(
+        Gap(led_rate=0.25, middle_rate=0.28, gap=0.028, lo=0.006, hi=0.05, people=1090),
+        PairedTest(
+            people=770, median_led_share=0.182, median_middle_share=0.25,
+            higher_on_middle=393, higher_on_led=297, ties=80, p_value=0.0003,
+        ),
+    )
+    joined = " ".join(lines)
+    assert "more often" in joined
+    assert "95% confidence interval" in joined
+    assert "770 people" in joined
+
+
+def test_the_summary_says_when_the_interval_has_not_settled_the_direction():
+    lines = chaperone_summary(
+        Gap(led_rate=0.25, middle_rate=0.26, gap=0.01, lo=-0.02, hi=0.04, people=40),
+        PairedTest(
+            people=0, median_led_share=None, median_middle_share=None,
+            higher_on_middle=0, higher_on_led=0, ties=0, p_value=None,
+        ),
+    )
+    assert "has not settled the direction" in " ".join(lines)
+
+
+def test_the_summary_is_empty_when_there_was_nothing_to_compare():
+    lines = chaperone_summary(
+        Gap(led_rate=None, middle_rate=None, gap=None, lo=None, hi=None, people=0),
+        PairedTest(
+            people=0, median_led_share=None, median_middle_share=None,
+            higher_on_middle=0, higher_on_led=0, ties=0, p_value=None,
+        ),
+    )
+    assert lines == []

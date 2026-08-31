@@ -65,6 +65,14 @@ The journals the cohort used most, so that "top-quartile venue" can be checked a
 
 Read this list before trusting the counts above it. Some conference abstract series carry an ISSN and are typed as journals by OpenAlex, so they cannot be told apart from a journal in the data and are counted as articles here. A venue near the top of this table with an impact near zero is usually one of them, and every count in this report includes it.
 
+### Who led the papers that reached those venues
+
+Across every paper the cohort wrote, its work reached a top-quartile venue 2.8% more often when its members were not leading it (95% confidence interval 0.6% to 5.0%).
+
+Comparing the same 770 people against themselves, the median person placed 18.2% of the papers they led in a top-quartile venue and 25.0% of the papers they did not.
+
+This follows Sekara et al., PNAS 2018 (doi 10.1073/pnas.1800471115), which found that a route into a prestigious venue often runs through a senior co-author. The whole of it, including the venue-by-venue breakdown and what the approximation does and does not support, is in `chaperone.md` and on its own page in `report.pdf`.
+
 ## How the cohort was built
 
 Every filter, in the order it ran, and how many people it left. This is the table to check when a cohort looks wrong: a step that removes almost everybody, or almost nobody, is usually the one to question.
@@ -91,7 +99,5 @@ OpenAlex splits some people across profiles and merges others with namesakes. Th
 Journal impact is a property of a journal and says nothing about an individual paper in it.
 
 Cells covering fewer than 5 people are withheld, because a quartile over a handful of people can identify them.
-
-`chaperone.md` asks a second question of the same cohort: when one of these papers reached a top-quartile venue, was the person leading it or co-authoring it? That page is also in `report.pdf`.
 
 Method: `docs/methods.md`. Data: OpenAlex (Priem, Piwowar and Orr, 2022), CC0.

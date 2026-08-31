@@ -25,7 +25,7 @@ Give it your ORCID, your institution, and your start year. It builds a cohort of
 - **Citations shown and never placed**: your papers have had 0 to N years to accrue them and the cohort's have had 8 to 18, so a comparison would measure the calendar
 - **Funnel transparency**: every filter, how many people it left, and what share of the step above that was
 - **Venue list**: the journals your subfield actually publishes in, with impact values, so "Q1" means Q1 in your field and not someone else's, and how much of the work in each one the cohort led
-- **Chaperone analysis** (optional): whether the cohort's flagship-venue papers are led from their own groups or co-authored on senior colleagues' papers, pooled and again within each person
+- **Chaperone analysis**: whether the cohort's flagship-venue papers are led from their own groups or co-authored on senior colleagues' papers, pooled and again within each person. `tenuretrack chaperone` repeats it on its own from what is already on disk, so trying a different `excluded_venues` costs nothing
 
 ## Quick start, in your browser
 
@@ -52,6 +52,9 @@ tenuretrack init --orcid 0000-0000-0000-0000 --institution "University of X" --s
 
 tenuretrack run
 # builds the cohort, computes norms, writes results/
+
+tenuretrack chaperone   # optional: redo just the led-vs-co-authored pass, free
+tenuretrack slides      # optional: the same numbers as a six-slide deck
 ```
 
 Everything is cached locally so reruns are free. A first run pulls a few thousand author records and takes 10 to 40 minutes depending on the size of your field, with a key. Without one it spends the day's allowance, stops, and resumes on the next run, so allow two or three days.
