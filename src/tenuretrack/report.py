@@ -336,8 +336,16 @@ def write_report(
     funnel: Funnel,
     cohort_size: int,
     institutions: int,
+    chaperone: Sequence[str] = (),
 ) -> Path:
-    """Write `results/report.md` and prove it carries nothing identifying."""
+    """Write `results/report.md` and prove it carries nothing identifying.
+
+    `chaperone` is the two-sentence summary of the led-versus-co-authored pass
+    when it ran, and empty when it did not. It sits directly under the venue
+    table because that is where it changes a reading: a list of top-quartile
+    journals invites the inference that a paper in one came out of the author's
+    own group, and this is the sentence that says how often it did.
+    """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     subject = config.subject
@@ -475,9 +483,26 @@ def write_report(
             f"{'yes' if is_top else ''} |"
         )
 
+    lines += ["", venue_note]
+
+    if chaperone:
+        lines += [
+            "",
+            "### Who led the papers that reached those venues",
+            "",
+        ]
+        for sentence in chaperone:
+            lines += [sentence, ""]
+        lines += [
+            "This follows Sekara et al., PNAS 2018 (doi "
+            "10.1073/pnas.1800471115), which found that a route into a "
+            "prestigious venue often runs through a senior co-author. The whole "
+            "of it, including the venue-by-venue breakdown and what the "
+            "approximation does and does not support, is in `chaperone.md` and "
+            "on its own page in `report.pdf`.",
+        ]
+
     lines += [
-        "",
-        venue_note,
         "",
         "## How the cohort was built",
         "",
@@ -526,7 +551,8 @@ def write_report(
         "CC0.",
         "",
     ]
-    if config.output.chaperone:
+    if config.output.chaperone and not chaperone:
+        # Only when the pass has not put its own finding in the body above.
         # Before the method line, not after it: the closing citation is the last
         # thing on the page or it is not a closing line.
         lines[-2:-2] = [
@@ -552,6 +578,7 @@ def build_report(
     *,
     this_year: int,
     results_dir: str | Path | None = None,
+    chaperone: Sequence[str] = (),
     on_progress: Callable[[str], None] | None = None,
 ) -> tuple[Path, MemberMetrics, int]:
     """Measure the subject, place them, and write the report."""
@@ -611,6 +638,7 @@ def build_report(
         funnel=funnel,
         cohort_size=cohort_size,
         institutions=benchmarks.institutions,
+        chaperone=chaperone,
     )
     if on_progress:
         on_progress(f"Wrote {path}.")

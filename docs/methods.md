@@ -178,7 +178,11 @@ Two readings are reported, because either alone misleads.
 
 Where the two disagree, the disagreement is the finding and the report says so.
 
-A per-venue table gives the share of the cohort's papers at each of the busiest venues that the cohort led, which names venues and never people.
+Both readings are summarised in two sentences under the venue table in `report.md`, because that is where they change a reading: a list of top-quartile journals invites the inference that a paper in one came out of the author's own group, and this is the number that says how often it did. `chaperone.md` and the matching page in `report.pdf` carry the whole of it.
+
+A per-venue table gives the share of the cohort's papers at each of the busiest venues that the cohort led, which names venues and never people. The same share is drawn beside the paper counts on the venue page of `report.pdf`, because a journal a subfield publishes in constantly but rarely leads in is a different kind of venue from one it leads in half the time.
+
+`run` performs this pass when `output.chaperone` is set. `tenuretrack chaperone` repeats it on its own, rebuilding the cohort from `data/pool.jsonl.gz`, `data/starts.jsonl.gz` and `data/works.jsonl.gz` rather than from `results/`: this analysis needs one row per person per paper, and that is exactly what never leaves `data/`. Only the venue lookups reach the client, and they come back from `.cache/` on any machine that has completed a run, so a rerun costs no requests. Missing cohort data is refused by name rather than regathered, since regathering is the several-thousand-request part of a run and not of a rerun. The command exists so that a change to `excluded_venues` or `article_types` can be tried without paying for the cohort again.
 
 This approximates, cross-sectionally, the longitudinal design of Sekara, Deville, Andersen, Jones, Lehmann and Ahmadpoor, "The chaperone effect in scientific publishing", PNAS 2018 (doi 10.1073/pnas.1800471115). They followed authors through time and modelled the sequence of a career; here each person's window is one snapshot and the comparison is across roles within it. The direction of a difference is informative, its size is not comparable to theirs.
 
@@ -187,20 +191,28 @@ Measured on one subfield cohort of 1,091: pooled top-quartile rate 25.4% on led 
 ## 9.1 Outputs
 
 `run` writes `results/report.pdf` alongside the Markdown and CSV: a cover, the
-subject against the cohort as one panel per metric, the subfield's distribution
-at the comparison horizon with its confidence intervals, the funnel, the venue
-list, and the caveats. It is drawn with matplotlib rather than converted from
-the deck, because `slides.export_pdf` needs LibreOffice and the no-install
-Colab path cannot install it in a reasonable time.
+subject against the cohort, the cohort year by year across the clock, the
+distribution at the comparison horizon with its confidence intervals, the
+funnel, the venue list, the chaperone pass when it ran, and the caveats. It is
+drawn with matplotlib rather than converted from the deck, because
+`slides.export_pdf` needs LibreOffice and the no-install Colab path cannot
+install it in a reasonable time.
 
-Each metric gets its own panel and its own scale. Putting a paper count and a
-journal impact on one shared axis means normalising them, and normalising hides
-the numbers a reader came for.
+Every metric is drawn as a row on a band running from the cohort's p25 to its
+p75, with the median marked and the actual numbers at the ends. The band rather
+than a shared axis: putting a paper count and a journal impact on one scale
+means normalising them, and normalising hides the numbers a reader came for. A
+value past either end is drawn just outside the band rather than to scale, so
+one long reach does not squash every other row.
+
+The year-by-year page exists because every quartile in this report is computed
+at every career year and only the last one used to reach a page. A reader in
+year two needs year two.
 
 The PDF is not text-scanned by the guardrail, and the reason is worth stating.
 matplotlib writes a string as a run of glyphs broken up by kerning, so a name
 can be present in the file and not findable as a substring: a scan would pass a
-split name and report a safety it had not checked. Instead the four input files
+split name and report a safety it had not checked. Instead the input files
 are scanned before any page is drawn, and a violation refuses to produce a PDF
 at all. Every page comes from those files and from fixed prose in
 `tenuretrack/pdf_report.py`, whose wording is held to the descriptive rule by

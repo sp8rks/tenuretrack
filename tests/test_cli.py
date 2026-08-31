@@ -214,9 +214,21 @@ def patch_pool(monkeypatch, outcome, members=(), tmp_path=None):
 
     monkeypatch.setattr(cli, "build_benchmarks", benchmarks_stage)
     monkeypatch.setattr(cli, "build_report", report_stage)
-    monkeypatch.setattr(
-        cli, "build_chaperone", lambda *a, **k: (Path("c.csv"), Path("c.md"), None, None)
-    )
+    def chaperone_stage(*_args, **_kwargs):
+        from tenuretrack.chaperone import Gap, PairedTest
+
+        return (
+            Path("c.csv"),
+            Path("c.md"),
+            Gap(led_rate=0.25, middle_rate=0.28, gap=0.03, lo=0.01, hi=0.05,
+                people=4),
+            PairedTest(
+                people=3, median_led_share=0.18, median_middle_share=0.25,
+                higher_on_middle=2, higher_on_led=1, ties=0, p_value=0.5,
+            ),
+        )
+
+    monkeypatch.setattr(cli, "build_chaperone", chaperone_stage)
 
 
 def fake_pool(kept=3, tmp_path=None):
@@ -269,12 +281,44 @@ def test_run_exits_separately_when_the_quota_runs_out(monkeypatch, tmp_path, con
     assert "rerunning repeats no requests" in text(result)
 
 
-@pytest.mark.parametrize("command", ["chaperone", "show-cohort"])
+@pytest.mark.parametrize("command", ["show-cohort"])
 def test_offline_stubs_still_validate_the_config(tmp_path, config_dict, command):
     path = write_config(tmp_path, config_dict)
     result = runner.invoke(app, [command, "--config", str(path)])
     assert result.exit_code == EXIT_NOT_IMPLEMENTED
     assert "not implemented yet" in text(result)
+
+
+def test_chaperone_says_what_to_run_first_when_data_is_missing(
+    monkeypatch, tmp_path, config_dict
+):
+    """The long stages are not silently re-run by a command meant to be a rerun.
+
+    Without this the command would fall through to `build_pool`, which would
+    start gathering tens of thousands of candidates from a command whose whole
+    point is that it costs nothing.
+    """
+    monkeypatch.setenv(MAILTO_ENV_VAR, "tester@example.edu")
+    path = write_config(tmp_path, config_dict)
+    result = runner.invoke(
+        app,
+        [
+            "chaperone", "--config", str(path),
+            "--data-dir", str(tmp_path / "empty"),
+            "--results-dir", str(tmp_path / "results"),
+        ],
+    )
+    assert result.exit_code == EXIT_BAD_CONFIG
+    out = text(result)
+    assert "pool.jsonl.gz" in out
+    assert "tenuretrack run" in out
+
+
+def test_chaperone_refuses_without_a_mailto(tmp_path, config_dict, monkeypatch):
+    monkeypatch.delenv(MAILTO_ENV_VAR, raising=False)
+    path = write_config(tmp_path, config_dict)
+    result = runner.invoke(app, ["chaperone", "--config", str(path)])
+    assert result.exit_code == EXIT_BAD_CONFIG
 
 
 def test_slides_says_what_to_run_first_when_there_is_no_output(tmp_path, config_dict):
