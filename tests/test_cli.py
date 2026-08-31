@@ -202,7 +202,15 @@ def patch_pool(monkeypatch, outcome, members=(), tmp_path=None):
     def report_stage(_client, config, _benchmarks, _funnel, **_kwargs):
         from tenuretrack.metrics import MemberMetrics
 
-        return Path("report.md"), MemberMetrics(author_id="A1", horizon=6, pubs=18, led=7), 6
+        # Under tmp_path, not a bare filename. `run` writes the PDF next to
+        # whatever this returns, and a bare name puts it in the repository root.
+        results = Path(tmp_path) / "results" if tmp_path else Path("results")
+        results.mkdir(parents=True, exist_ok=True)
+        return (
+            results / "report.md",
+            MemberMetrics(author_id="A1", horizon=6, pubs=18, led=7),
+            6,
+        )
 
     monkeypatch.setattr(cli, "build_benchmarks", benchmarks_stage)
     monkeypatch.setattr(cli, "build_report", report_stage)
@@ -234,7 +242,10 @@ def test_run_completes_the_whole_pipeline(
     monkeypatch, tmp_path, config_dict
 ):
     monkeypatch.setenv(MAILTO_ENV_VAR, "tester@example.edu")
-    patch_pool(monkeypatch, fake_pool(kept=7, tmp_path=tmp_path), members=range(4))
+    patch_pool(
+        monkeypatch, fake_pool(kept=7, tmp_path=tmp_path), members=range(4),
+        tmp_path=tmp_path,
+    )
     path = write_config(tmp_path, config_dict)
     result = runner.invoke(app, ["run", "--config", str(path)])
     assert result.exit_code == 0, text(result)

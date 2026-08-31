@@ -2,36 +2,43 @@
 
 **Nobody tells assistant professors the numbers. This tool computes them.**
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/sp8rks/tenuretrack/blob/main/notebooks/tenuretrack_colab.ipynb)
+
+**Run it in your browser.** No install, no Python. Open the notebook, type your
+ORCID, your university, your start year and your email, and run the cells from
+the top. It builds your cohort on a temporary Google machine and hands you a PDF
+report and a zip. Grab a [free OpenAlex API key](https://openalex.org/settings/api)
+first: it takes thirty seconds, costs nothing, and turns a three-day run into a
+forty-minute one.
+
 Every assistant professor goes up for tenure. Almost none of them are told what a typical record looks like: how many papers, how many led from their own group, what venues, what h-index, by year six. Departments have opinions. Senior colleagues have anecdotes. The actual distribution is knowable, and this tool computes it from open data.
 
 Give it your ORCID, your institution, and your start year. It builds a cohort of early-career faculty in your subfield from [OpenAlex](https://openalex.org), computes publication norms through each year of the tenure clock, and shows where you sit at the same point on the clock. Aggregates only. No names, no rankings, no per-person tables.
 
 ## What you get
 
-A short report (a PDF with the charts, plus Markdown, CSV, and a six-slide PPTX) containing:
+`results/report.pdf` is the thing to open: the whole report with the charts, the funnel and the limits in one document. Beside it are the same numbers as Markdown and CSV, and a six-slide PPTX for anyone who has to present them.
 
-- **Subfield norms** through year N (p25 / median / p75): publications, lead-author publications, lead share, citations, h-index, median venue impact, share of papers in top-quartile venues
-- **You vs. cohort** at the same career year, with citations deliberately excluded (your papers have had 0 to N years to accrue citations; the cohort's have had 8 to 18)
-- **Funnel transparency**: how many candidates were considered and why each filter removed people
-- **Venue list**: the journals your subfield actually publishes in, with impact values, so "Q1" means Q1 in your field and not someone else's
-- **Chaperone report** (optional): whether the cohort's flagship-venue papers are led from their own groups or co-authored on senior colleagues' papers
+- **Where your record sits** at the same career year as the cohort, each measure against the cohort's middle half
+- **Year by year**: the cohort's p25/median/p75 at the end of every year of the clock, not only at year six, so the numbers mean something in year two as well
+- **Subfield norms** (p25 / median / p75, with cluster-bootstrap confidence intervals): publications, lead-author publications, lead share, citations, h-index, median venue impact, share of papers in top-quartile venues
+- **Citations shown and never placed**: your papers have had 0 to N years to accrue them and the cohort's have had 8 to 18, so a comparison would measure the calendar
+- **Funnel transparency**: every filter, how many people it left, and what share of the step above that was
+- **Venue list**: the journals your subfield actually publishes in, with impact values, so "Q1" means Q1 in your field and not someone else's, and how much of the work in each one the cohort led
+- **Chaperone analysis** (optional): whether the cohort's flagship-venue papers are led from their own groups or co-authored on senior colleagues' papers, pooled and again within each person
 
 ## Quick start, in your browser
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/sp8rks/tenuretrack/blob/main/notebooks/tenuretrack_colab.ipynb)
+[Open the notebook in Colab](https://colab.research.google.com/github/sp8rks/tenuretrack/blob/main/notebooks/tenuretrack_colab.ipynb).
+It installs the tool on a temporary Google machine, builds your cohort,
+shows the report inline, and hands you a zip of everything. See
+[notebooks/](notebooks/) for what each cell does.
 
-No install, no Python. Open the notebook, type your ORCID, your university, your
-start year, and your email, and run the cells from the top. It installs the tool
-on a temporary Google machine, builds your cohort, shows the report, and hands
-you a zip. See [notebooks/](notebooks/).
-
-**Get a free OpenAlex API key first**, at
-[openalex.org/settings/api](https://openalex.org/settings/api). It takes about
-thirty seconds, costs nothing, and needs no payment details. Without one you get
-roughly 1,000 requests a day and a cohort build spends a few thousand, so the
-run stops each day and resumes the next: two or three days instead of forty
-minutes. The tool works either way, and the key is the single thing that most
-changes how this feels to use.
+**The API key matters.** Without one OpenAlex gives you roughly 1,000 requests a
+day, and a cohort build spends a few thousand, so the run stops each day and
+resumes the next: two or three days instead of forty minutes. The key is free,
+needs no payment details, and is the single thing that most changes how this
+feels to use. Get one at [openalex.org/settings/api](https://openalex.org/settings/api).
 
 ## Quick start, on your own machine
 

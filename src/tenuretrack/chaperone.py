@@ -424,19 +424,25 @@ def write_chaperone_md(
     label = config.subfield.label
 
     lines = [
-        f"# Led versus co-authored papers in {label}",
+        f"# Who leads the papers that reach the best venues in {label}",
         "",
         f"For {cohort_size} people in {label}, through career year "
         f"{config.cohort.horizon_years}: when a paper reached a top-quartile "
-        "venue, was this person leading it?",
+        "venue, was this person leading it or co-authoring it?",
         "",
-        "Roles follow the last-author convention. Led means last author or "
-        "flagged corresponding author. First-author-not-leading is the shape of "
-        "a paper written inside somebody else's group. Middle is everything "
-        "else. Only papers whose venue has an impact figure are counted, on "
-        "every side.",
+        "Led means last author, or flagged as the corresponding one. First "
+        "author but not leading is the shape of a paper written inside somebody "
+        "else's group. Middle is everything else. A paper counts on every side "
+        "only if its venue has an impact figure.",
         "",
-        "## Across all the cohort's papers",
+        "The two readings below answer different questions and are both here "
+        "because either one alone misleads. The pooled rate is dominated by "
+        "whoever wrote the most papers. The paired comparison describes a "
+        "typical person, and drops anyone without enough papers in both roles. "
+        "Where they disagree, that disagreement is the finding. The same two "
+        "readings are drawn as charts in `report.pdf`.",
+        "",
+        "## Across every paper the cohort wrote",
         "",
         "| Role | People | Papers | In top-quartile venues | Rate |",
         "|---|---|---|---|---|",
@@ -447,19 +453,21 @@ def write_chaperone_md(
             f"{rate.top_quartile} | {_pct(rate.rate)} |"
         )
 
-    lines += ["", "## Middle-author rate minus led rate", ""]
+    lines += ["", "## The gap between not leading and leading", ""]
     if gap.gap is None:
         lines.append("Too few papers in one of the roles to compare.")
     else:
         lines += [
-            f"{_pct(gap.gap)} (95% CI {_pct(gap.lo)} to {_pct(gap.hi)}), across "
-            f"{gap.people} people.",
+            f"Middle-author rate minus led rate: {_pct(gap.gap)} "
+            f"(95% confidence interval {_pct(gap.lo)} to {_pct(gap.hi)}), "
+            f"across {gap.people} people.",
             "",
             "A positive number means the cohort's papers reached top-quartile "
             "venues more often when its members were not leading them. The "
-            "interval comes from a cluster bootstrap resampling people, so it "
-            "describes how much this would move with a different draw of people "
-            "from the same subfield.",
+            "interval comes from a cluster bootstrap that resamples people, so "
+            "it says how far this would move with a different draw of people "
+            "from the same subfield. An interval that spans zero has not "
+            "settled the direction either way.",
         ]
 
     lines += ["", "## The same people, compared against themselves", ""]
@@ -476,26 +484,33 @@ def write_chaperone_md(
         )
         lines += [
             f"{paired.people} people had at least {MIN_PAPERS_PER_ROLE} "
-            "venue-resolvable papers in both roles.",
+            "papers with a resolvable venue in both roles. Every one of them is "
+            "their own control here, so field, institution, career stage and "
+            "how prolific someone is all cancel out.",
             "",
             "| | Median within-person rate |",
             "|---|---|",
             f"| Papers they led | {_pct(paired.median_led_share)} |",
             f"| Papers they did not lead | {_pct(paired.median_middle_share)} |",
             "",
-            f"{paired.higher_on_middle} reached top-quartile venues {direction}, "
-            f"{paired.higher_on_led} the other way, {paired.ties} the same. "
-            f"Sign test p = {paired.p_value:.4g}."
-            if paired.p_value is not None
-            else "",
-            "",
-            "Every person here is their own control, so field, institution, "
-            "career stage and how prolific someone is all cancel out.",
         ]
+        counts = (
+            f"{paired.higher_on_middle} of them reached top-quartile venues "
+            f"{direction}, {paired.higher_on_led} the other way, and "
+            f"{paired.ties} at the same rate in both roles."
+        )
+        if paired.p_value is not None:
+            counts += f" Sign test p = {paired.p_value:.4g}."
+        lines.append(counts)
 
     lines += [
         "",
-        "## Where the cohort leads and where it does not",
+        "## Where the cohort leads, and where it does not",
+        "",
+        "The same journals the report lists, with the share of the cohort's "
+        "papers in each that a cohort member led. A journal a subfield "
+        "publishes in constantly but rarely leads in is a different kind of "
+        "venue from one it leads in half the time.",
         "",
         "| Venue | Cohort papers | Share the cohort led |",
         "|---|---|---|",
@@ -512,20 +527,19 @@ def write_chaperone_md(
         "(doi 10.1073/pnas.1800471115), which found that a researcher's route "
         "into a prestigious venue often runs through a senior co-author.",
         "",
-        "It is an approximation of their design, not a replication. They "
+        "It is an approximation of their design and not a replication. They "
         "followed authors through time and modelled the sequence of a career. "
-        "Here each person's window is one snapshot and the comparison is across "
-        "roles within it. The direction of a difference is informative; its "
-        "size should not be read against their figures.",
+        "Here each person's window is a single snapshot and the comparison is "
+        "across roles inside it. The direction of a difference is informative; "
+        "its size should not be read against their figures.",
         "",
         "Corresponding-author flags are missing for many journals and years, so "
         "last position carries most of the weight in deciding who led. Where a "
         "field does not order authors by contribution, none of this applies.",
         "",
-        "The two readings above answer different questions. The pooled rate is "
-        "dominated by whoever wrote the most papers; the paired comparison "
-        "describes a typical person but drops anyone without papers in both "
-        "roles. Where they disagree, that disagreement is the finding.",
+        "Nothing here says who should lead what. It is a description of how a "
+        "group of papers was authored, and a piece of context for reading any "
+        "one venue list, including the one in the report beside it.",
         "",
         "Method: `docs/methods.md`. Data: OpenAlex (Priem, Piwowar and Orr, "
         "2022), CC0.",

@@ -23,6 +23,19 @@ METRICS = [
     ("led", "Led articles (last or corresponding)", 17, 3, 6, 12, "yes"),
     ("citations", "Citations to those articles", 2593, 410, 942, 2128, "no"),
     ("h_index", "h-index over those articles", 22, 9, 14, 21, "yes"),
+    ("venue_impact_median", "Median venue impact", 4.91, 3.26, 4.17, 5.87, "yes"),
+    ("top_quartile_share", "Share in top-quartile venues", 0.17, 0.09, 0.21, 0.36,
+     "yes"),
+]
+
+CHAPERONE_ROWS = [
+    ["pooled_rate", "led", 1044, 10566, 0.2538, "", ""],
+    ["pooled_rate", "first_not_led", 885, 3998, 0.2231, "", ""],
+    ["pooled_rate", "middle", 1063, 16488, 0.2814, "", ""],
+    ["gap", "middle_minus_led", 1090, "", 0.0276, 0.0062, 0.0498],
+    ["paired", "median_led_share", 770, "", 0.1818, "", ""],
+    ["paired", "median_middle_share", 770, "", 0.2500, "", ""],
+    ["venue", "Journal of Examples", "", 400, 0.44, "", ""],
 ]
 
 
@@ -58,6 +71,8 @@ def results(tmp_path) -> Path:
             for m, label, value, p25, p50, p75, compared in METRICS
         ],
     )
+    # Every career year, not only the horizon: the trajectory page is drawn
+    # from the years the horizon table throws away.
     _write_csv(
         out / "benchmarks.csv",
         [
@@ -66,7 +81,15 @@ def results(tmp_path) -> Path:
             "p75_ci_low", "p75_ci_high",
         ],
         [
-            [6, m, 300, p25, p50, p75, p25, p25, p50, p50, p75, p75]
+            [
+                year, m, 300,
+                round(p25 * year / 6, 2), round(p50 * year / 6, 2),
+                round(p75 * year / 6, 2),
+                round(p25 * year / 6, 2), round(p25 * year / 6, 2),
+                round(p50 * year / 6, 2), round(p50 * year / 6, 2),
+                round(p75 * year / 6, 2), round(p75 * year / 6, 2),
+            ]
+            for year in range(1, 7)
             for m, _label, _v, p25, p50, p75, _c in METRICS
         ],
     )
@@ -87,15 +110,52 @@ def config(config_dict):
     return build_config(config_dict)
 
 
+def _pages(path: Path) -> int:
+    """How many pages the PDF holds, without a PDF library to ask.
+
+    `/Type /Pages` is the page tree's root node rather than a page, so it has
+    to come back out of the count or every document reads one page too long.
+    """
+    raw = path.read_bytes()
+    return raw.count(b"/Type /Page") - raw.count(b"/Type /Pages")
+
+
 def test_a_pdf_is_written_with_a_page_for_each_section(results, config):
     path = build_pdf_report(results, config)
     assert path.name == PDF_FILENAME
     assert path.exists()
+    assert path.read_bytes().startswith(b"%PDF")
+    # Cover, subject, trajectory, norms, funnel, venues, caveats. No chaperone
+    # page, because this fixture has no chaperone.csv.
+    assert _pages(path) == 7
 
-    raw = path.read_bytes()
-    assert raw.startswith(b"%PDF")
-    # Cover, subject, norms, funnel, venues, caveats.
-    assert raw.count(b"/Type /Page\n") == 6 or raw.count(b"/Type /Page") >= 6
+
+def test_the_chaperone_pass_earns_its_own_page(results, config):
+    """The finding most likely to change how a record reads belongs in the PDF.
+
+    It used to live only in chaperone.md, which is a file most people never
+    open, so its presence in the forwarded document is worth a test.
+    """
+    without = _pages(build_pdf_report(results, config))
+    _write_csv(
+        results / "chaperone.csv",
+        ["section", "key", "people", "papers", "value", "low", "high"],
+        CHAPERONE_ROWS,
+    )
+    assert _pages(build_pdf_report(results, config)) == without + 1
+
+
+def test_every_metric_reaches_the_norms_table(results, config):
+    """A key typed by hand once dropped median venue impact from this page.
+
+    The order and the labels come from metrics.METRICS now, so a metric added
+    there cannot silently miss the report.
+    """
+    from tenuretrack.metrics import METRICS as ALL_METRICS
+    from tenuretrack.pdf_report import METRIC_LABELS, METRIC_ORDER
+
+    assert tuple(m.key for m in ALL_METRICS) == METRIC_ORDER
+    assert all(METRIC_LABELS[m.key] == m.label for m in ALL_METRICS)
 
 
 def test_the_pdf_needs_no_libreoffice(results, config, monkeypatch):

@@ -28,6 +28,7 @@ from pptx.util import Inches, Pt
 
 from tenuretrack.figures import ACCENT, dot_and_range_chart, funnel_chart, venue_chart
 from tenuretrack.guardrail import GuardrailViolation, assert_aggregates_only
+from tenuretrack.metrics import METRICS
 from tenuretrack.slide_data import (
     SlideData,
     _float,
@@ -55,6 +56,17 @@ ACCENT_RGB = RGBColor.from_string(ACCENT.lstrip("#").upper())
 SLIDE_W = Inches(13.333)
 SLIDE_H = Inches(7.5)
 MARGIN = Inches(0.6)
+
+
+def _quartile_cell(row: dict, quartile: str) -> str:
+    """One quartile with its interval, so a slide carries the same hedge the report does."""
+    value = row.get(quartile) or ""
+    if not value:
+        return "withheld"
+    low, high = row.get(quartile + "_ci_low"), row.get(quartile + "_ci_high")
+    if not low or not high:
+        return value
+    return f"{value}\n({low} to {high})"
 
 
 # ------------------------------------------------------------------ drawing
@@ -191,17 +203,18 @@ def build_slides(
     # 3. Subfield norms
     slide = _blank(prs)
     _heading(slide, f"What the subfield published through year {data.horizon}")
-    rows = [["Metric", "p25", "Median", "p75"]]
-    for row in data.benchmarks:
-        if int(row["career_year"]) != data.horizon:
+    at_horizon = {
+        row["metric"]: row
+        for row in data.benchmarks
+        if int(row["career_year"]) == data.horizon
+    }
+    rows = [[f"Through year {data.horizon}", "p25", "Median", "p75"]]
+    for metric in METRICS:
+        row = at_horizon.get(metric.key)
+        if row is None:
             continue
         rows.append(
-            [
-                row["metric"].replace("_", " "),
-                row["p25"] or "withheld",
-                row["p50"] or "withheld",
-                row["p75"] or "withheld",
-            ]
+            [metric.label] + [_quartile_cell(row, q) for q in ("p25", "p50", "p75")]
         )
     if len(rows) > 1:
         _table(
@@ -210,8 +223,9 @@ def build_slides(
         )
     _text(
         slide,
-        "Quartiles across people, not averages. Citations are counted as they "
-        "stand today, for papers that are eight to eighteen years old.",
+        "Quartiles across people, not averages. Brackets are 95% cluster-"
+        "bootstrap intervals. Citations are counted as they stand today, for "
+        "papers that are eight to eighteen years old.",
         left=MARGIN, top=Inches(6.3), width=body_w, height=Inches(0.8),
         size=SMALL_SIZE, color=MUTED,
     )
