@@ -18,3 +18,9 @@ build/
 .idea/
 .DS_Store
 .ipynb_checkpoints/
+
+# Output from a run made at the repository root. The committed example lives in
+# examples/*/results/, which these leading slashes deliberately do not match.
+# A stale report.pdf sat here for days looking like the real one.
+/report.pdf
+/results/
